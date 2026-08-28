@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Scratch風経理 | お金の流れをブロックで見える化</title>
+    <meta name="description" content="売上・経費を大雑把な粒度から直感的にブロック形式で整理・集計できる事業者向け経理アプリ" />
+    <meta property="og:title" content="Scratch風経理" />
+    <meta property="og:description" content="売上・経費を大雑把な粒度から直感的にブロック形式で整理・集計できる事業者向け経理アプリ" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Scratch経理" />
+    <meta name="application-name" content="Scratch経理" />
+  </head>
+  <body class="bg-slate-100 text-gray-800 antialiased select-none-form">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Service Worker Registration for PWA Offline Support
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => {
+              console.log('PWA Service Worker registered with scope:', reg.scope);
+            })
+            .catch((err) => {
+              console.log('PWA Service Worker registration skipped/failed:', err);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
+

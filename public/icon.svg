@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#4338ca" />
+      <stop offset="100%" stop-color="#1e1b4b" />
+    </linearGradient>
+    <linearGradient id="blockSales" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="blockExpense" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded rectangle -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+
+  <!-- Background Accent Elements -->
+  <circle cx="420" cy="90" r="60" fill="#ffffff" fill-opacity="0.08" />
+  <circle cx="90" cy="420" r="90" fill="#ffffff" fill-opacity="0.05" />
+
+  <!-- Scratch interlocking blocks container -->
+  <g filter="url(#shadow)" transform="translate(64, 88)">
+    <!-- Top Sales Block (Emerald) with puzzle notch -->
+    <path d="M 0 32 C 0 14.3 14.3 0 32 0 L 140 0 C 145 0 150 5 155 12 C 162 22 176 28 192 28 C 208 28 222 22 229 12 C 234 5 239 0 244 0 L 352 0 C 369.7 0 384 14.3 384 32 L 384 116 C 384 133.7 369.7 148 352 148 L 244 148 C 239 148 234 153 229 160 C 222 170 208 176 192 176 C 176 176 162 170 155 160 C 150 153 145 148 140 148 L 32 148 C 14.3 148 0 133.7 0 116 Z" fill="url(#blockSales)" />
+    
+    <!-- Sales Block Inner Symbol (¥ + Up Arrow) -->
+    <text x="56" y="94" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="44" letter-spacing="-1">¥ 売上</text>
+    <path d="M 310 96 L 310 52 M 310 52 L 294 68 M 310 52 L 326 68" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Bottom Expense Block (Amber) with puzzle tab connecting -->
+    <g transform="translate(0, 168)">
+      <path d="M 0 32 C 0 14.3 14.3 0 32 0 L 140 0 C 145 0 150 5 155 12 C 162 22 176 28 192 28 C 208 28 222 22 229 12 C 234 5 239 0 244 0 L 352 0 C 369.7 0 384 14.3 384 32 L 384 124 C 384 141.7 369.7 156 352 156 L 32 156 C 14.3 156 0 141.7 0 124 Z" fill="url(#blockExpense)" />
+      
+      <!-- Expense Block Inner Symbol (¥ - Down Arrow) -->
+      <text x="56" y="98" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="44" letter-spacing="-1">¥ 経費</text>
+      <path d="M 310 60 L 310 104 M 310 104 L 294 88 M 310 104 L 326 88" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+  </g>
+</svg>

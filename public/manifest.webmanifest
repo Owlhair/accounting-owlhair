@@ -1,0 +1,19 @@
+{
+  "name": "Scratch風経理",
+  "short_name": "Scratch経理",
+  "description": "売上・経費を大雑把な粒度から直感的にブロック形式で整理・集計できる事業者向け経理アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity", "business"]
+}
