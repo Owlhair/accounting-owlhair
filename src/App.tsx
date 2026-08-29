@@ -228,25 +228,36 @@ export default function App() {
     }
   };
 
-  // Handler: Save Fiscal Settings
-  const handleSaveFiscalSettings = (newFiscalSettings: FiscalSettings) => {
+  // Handler: Save Settings (Fiscal & Stores)
+  const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[]) => {
+    const isFiscalChanged =
+      newFiscalSettings.fiscalYearEndMonth !== settings.fiscalSettings.fiscalYearEndMonth ||
+      newFiscalSettings.fiscalYearStartYear !== settings.fiscalSettings.fiscalYearStartYear;
+
     setSettings(prev => ({
       ...prev,
       fiscalSettings: newFiscalSettings,
-    }));
-    // Re-select first fiscal period
-    const newPeriods = calculateFiscalPeriods(transactions, newFiscalSettings);
-    if (newPeriods.length > 0) {
-      setSelectedFilter(newPeriods[0].key);
-    }
-  };
-
-  // Handler: Save Stores
-  const handleSaveStores = (newStores: string[]) => {
-    setSettings(prev => ({
-      ...prev,
       stores: newStores,
     }));
+
+    // If fiscal year settings did not change (e.g. user only added or edited stores), DO NOT CHANGE selectedFilter!
+    if (!isFiscalChanged) {
+      return;
+    }
+
+    // If fiscal year settings DID change, only change selectedFilter if the current filter is no longer valid
+    const newPeriods = calculateFiscalPeriods(transactions, newFiscalSettings);
+    const isCurrentPeriodStillValid = newPeriods.some(p => p.key === selectedFilter);
+    const isSingleMonth = availableMonths.includes(selectedFilter);
+    const isAll = selectedFilter === 'ALL';
+
+    if (!isCurrentPeriodStillValid && !isSingleMonth && !isAll) {
+      if (newPeriods.length > 0) {
+        setSelectedFilter(newPeriods[0].key);
+      } else {
+        setSelectedFilter('ALL');
+      }
+    }
   };
 
   // Handler: Reset to Sample Demo Data
@@ -265,9 +276,28 @@ export default function App() {
     setChatMessages(clearChatMessages());
   };
 
-  // Handler: Restore from JSON
-  const handleRestoreTransactions = (restored: Transaction[]) => {
-    setTransactions(restored);
+  // Handler: Restore from JSON (Transactions + Settings + Chat)
+  const handleRestoreData = (
+    restoredTransactions: Transaction[],
+    restoredSettings?: AppSettings,
+    restoredChatMessages?: ChatMessage[]
+  ) => {
+    setTransactions(restoredTransactions);
+    if (restoredSettings) {
+      setSettings(prev => ({
+        ...prev,
+        ...restoredSettings,
+        stores: restoredSettings.stores && restoredSettings.stores.length > 0 ? restoredSettings.stores : prev.stores,
+        fiscalSettings: {
+          fiscalYearEndMonth: restoredSettings.fiscalSettings?.fiscalYearEndMonth ?? prev.fiscalSettings.fiscalYearEndMonth,
+          fiscalYearStartYear: restoredSettings.fiscalSettings?.fiscalYearStartYear ?? prev.fiscalSettings.fiscalYearStartYear,
+        },
+      }));
+    }
+    if (restoredChatMessages && Array.isArray(restoredChatMessages)) {
+      setChatMessages(restoredChatMessages);
+      saveChatMessages(restoredChatMessages);
+    }
   };
 
   return (
@@ -443,15 +473,17 @@ export default function App() {
         onClose={() => setIsFiscalSettingsOpen(false)}
         fiscalSettings={settings.fiscalSettings}
         stores={settings.stores}
-        onSaveFiscalSettings={handleSaveFiscalSettings}
-        onSaveStores={handleSaveStores}
+        onSaveSettings={handleSaveSettings}
+        onOpenBackup={() => setIsBackupOpen(true)}
       />
 
       <DataBackupModal
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
         transactions={transactions}
-        onRestoreTransactions={handleRestoreTransactions}
+        settings={settings}
+        chatMessages={chatMessages}
+        onRestoreData={handleRestoreData}
         onResetSampleData={handleResetSampleData}
         onClearAll={handleClearAll}
       />

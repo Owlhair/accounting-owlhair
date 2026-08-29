@@ -1,5 +1,13 @@
-import { Transaction } from '../types';
+import { Transaction, AppSettings, ChatMessage } from '../types';
 import { getGranularityLabel, getSourceTypeLabel } from './calculations';
+
+export interface FullBackupPayload {
+  version: number;
+  exported_at: string;
+  transactions: Transaction[];
+  settings?: AppSettings;
+  chatMessages?: ChatMessage[];
+}
 
 export const exportTransactionsToCsv = (transactions: Transaction[], filenamePrefix = 'scratch_keiri'): void => {
   const headers = [
@@ -8,6 +16,7 @@ export const exportTransactionsToCsv = (transactions: Transaction[], filenamePre
     '終了日',
     '区分',
     'カテゴリ',
+    '店舗・部門',
     '金額(円)',
     '決済方法',
     '入力粒度',
@@ -39,6 +48,7 @@ export const exportTransactionsToCsv = (transactions: Transaction[], filenamePre
     escapeCsv(tx.date_to),
     escapeCsv(typeLabels[tx.type] || tx.type),
     escapeCsv(tx.category),
+    escapeCsv(tx.store || '全社共通'),
     escapeCsv(tx.amount),
     escapeCsv(tx.payment_method),
     escapeCsv(getGranularityLabel(tx.granularity)),
@@ -63,8 +73,19 @@ export const exportTransactionsToCsv = (transactions: Transaction[], filenamePre
   URL.revokeObjectURL(url);
 };
 
-export const exportTransactionsToJson = (transactions: Transaction[]): void => {
-  const jsonStr = JSON.stringify(transactions, null, 2);
+export const exportTransactionsToJson = (
+  transactions: Transaction[],
+  settings?: AppSettings,
+  chatMessages?: ChatMessage[]
+): void => {
+  const payload: FullBackupPayload = {
+    version: 2,
+    exported_at: new Date().toISOString(),
+    transactions,
+    settings,
+    chatMessages,
+  };
+  const jsonStr = JSON.stringify(payload, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -77,22 +98,48 @@ export const exportTransactionsToJson = (transactions: Transaction[]): void => {
   URL.revokeObjectURL(url);
 };
 
-export const parseJsonBackup = async (file: File): Promise<Transaction[]> => {
+export interface ParsedBackupResult {
+  transactions: Transaction[];
+  settings?: AppSettings;
+  chatMessages?: ChatMessage[];
+}
+
+export const parseJsonBackup = async (file: File): Promise<ParsedBackupResult> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
         const data = JSON.parse(text);
-        if (!Array.isArray(data)) {
-          throw new Error('JSONの形式が正しくありません（配列形式である必要があります）');
+
+        // Check if format is modern FullBackupPayload object
+        if (data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.transactions)) {
+          const txList = data.transactions as Transaction[];
+          const isValid = txList.every(item => item && typeof item === 'object' && 'id' in item && 'amount' in item);
+          if (!isValid) {
+            throw new Error('取引データに必要なプロパティ(id, amount等)が不足しています');
+          }
+          resolve({
+            transactions: txList,
+            settings: data.settings,
+            chatMessages: data.chatMessages,
+          });
+          return;
         }
-        // Basic validation
-        const isValid = data.every(item => item && typeof item === 'object' && 'id' in item && 'amount' in item);
-        if (!isValid) {
-          throw new Error('データ構造に必要なプロパティ(id, amount等)が不足しています');
+
+        // Format is legacy Transaction[] array
+        if (Array.isArray(data)) {
+          const isValid = data.every(item => item && typeof item === 'object' && 'id' in item && 'amount' in item);
+          if (!isValid) {
+            throw new Error('データ構造に必要なプロパティ(id, amount等)が不足しています');
+          }
+          resolve({
+            transactions: data as Transaction[],
+          });
+          return;
         }
-        resolve(data as Transaction[]);
+
+        throw new Error('JSONの形式が正しくありません（バックアップ形式または取引配列である必要があります）');
       } catch (err) {
         reject(err);
       }
@@ -101,3 +148,4 @@ export const parseJsonBackup = async (file: File): Promise<Transaction[]> => {
     reader.readAsText(file);
   });
 };
+

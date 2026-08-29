@@ -7,8 +7,8 @@ interface SettingsModalProps {
   onClose: () => void;
   fiscalSettings: FiscalSettings;
   stores: string[];
-  onSaveFiscalSettings: (newSettings: FiscalSettings) => void;
-  onSaveStores: (stores: string[]) => void;
+  onSaveSettings: (newSettings: FiscalSettings, newStores: string[]) => void;
+  onOpenBackup?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -16,8 +16,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   fiscalSettings,
   stores,
-  onSaveFiscalSettings,
-  onSaveStores,
+  onSaveSettings,
+  onOpenBackup,
 }) => {
   const [activeTab, setActiveTab] = useState<'fiscal' | 'stores'>('fiscal');
   const [endMonth, setEndMonth] = useState<number>(fiscalSettings.fiscalYearEndMonth || 3);
@@ -48,11 +48,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveFiscalSettings({
-      fiscalYearEndMonth: Number(endMonth),
-      fiscalYearStartYear: Number(startYear),
-    });
-    onSaveStores(storeList);
+    onSaveSettings(
+      {
+        fiscalYearEndMonth: Number(endMonth),
+        fiscalYearStartYear: Number(startYear),
+      },
+      storeList
+    );
     onClose();
   };
 
@@ -245,6 +247,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </>
           )}
+
+          {/* Cache Notice & Backup link */}
+          <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/60 text-[11px] text-amber-900 flex items-start justify-between gap-3">
+            <div className="space-y-0.5">
+              <span className="font-bold block">💡 設定の保存とブラウザキャッシュについて:</span>
+              <span className="text-amber-800">
+                設定はブラウザ内に自動保存されます。ブラウザの「キャッシュ・閲覧履歴の全消去」を行うと初期化されるため、定期的に「バックアップ」からJSON保存しておくことを推奨します。
+              </span>
+            </div>
+            {onOpenBackup && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenBackup();
+                }}
+                className="shrink-0 px-2.5 py-1 text-xs font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors whitespace-nowrap"
+              >
+                バックアップへ
+              </button>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2.5">

@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Transaction } from '../types';
+import { Transaction, AppSettings, ChatMessage } from '../types';
 import { exportTransactionsToCsv, exportTransactionsToJson, parseJsonBackup } from '../utils/csvExport';
-import { X, Download, Upload, RefreshCw, Trash2, FileSpreadsheet, FileJson, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Download, Upload, RefreshCw, Trash2, FileSpreadsheet, FileJson, CheckCircle2, AlertCircle, Info, ShieldCheck } from 'lucide-react';
 
 interface DataBackupModalProps {
   isOpen: boolean;
   onClose: () => void;
   transactions: Transaction[];
-  onRestoreTransactions: (transactions: Transaction[]) => void;
+  settings: AppSettings;
+  chatMessages: ChatMessage[];
+  onRestoreData: (transactions: Transaction[], settings?: AppSettings, chatMessages?: ChatMessage[]) => void;
   onResetSampleData: () => void;
   onClearAll: () => void;
 }
@@ -16,7 +18,9 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   isOpen,
   onClose,
   transactions,
-  onRestoreTransactions,
+  settings,
+  chatMessages,
+  onRestoreData,
   onResetSampleData,
   onClearAll,
 }) => {
@@ -27,12 +31,12 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
 
   const handleCsvDownload = () => {
     exportTransactionsToCsv(transactions);
-    setSuccessMessage('CSVファイルをダウンロードしました（Excel対応UTF-8 BOM付き）');
+    setSuccessMessage('CSVファイルをダウンロードしました（店舗列追加・Excel対応UTF-8 BOM付き）');
   };
 
   const handleJsonDownload = () => {
-    exportTransactionsToJson(transactions);
-    setSuccessMessage('JSONバックアップファイルをダウンロードしました');
+    exportTransactionsToJson(transactions, settings, chatMessages);
+    setSuccessMessage('JSONバックアップ（取引データ・決算期設定・店舗設定・チームチャット）を保存しました');
   };
 
   const handleJsonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,9 +46,10 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
     if (!file) return;
 
     try {
-      const data = await parseJsonBackup(file);
-      onRestoreTransactions(data);
-      setSuccessMessage(`JSONバックアップから ${data.length} 件の取引データを復元しました`);
+      const result = await parseJsonBackup(file);
+      onRestoreData(result.transactions, result.settings, result.chatMessages);
+      const settingsNote = result.settings ? '・環境設定（決算期 / 店舗）' : '';
+      setSuccessMessage(`バックアップから取引 ${result.transactions.length} 件${settingsNote}を正常に復元しました`);
     } catch (err) {
       setErrorMessage('バックアップの読み込みに失敗しました: ' + (err as Error).message);
     }
@@ -62,7 +67,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight">データ管理・バックアップ</h2>
-              <p className="text-xs text-indigo-200">CSV/JSON出力・復元・サンプルデータ初期化</p>
+              <p className="text-xs text-indigo-200">CSV/JSON出力・完全復元・キャッシュ対策</p>
             </div>
           </div>
           <button
@@ -76,6 +81,18 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
 
         {/* Content */}
         <div className="p-5 space-y-5">
+          {/* Important Cache Notice */}
+          <div className="p-3.5 bg-blue-50 border border-blue-200/80 rounded-xl text-xs space-y-1.5 text-blue-950">
+            <div className="flex items-center gap-1.5 font-bold text-blue-900">
+              <Info className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>ブラウザのキャッシュ消去時のご注意</span>
+            </div>
+            <p className="text-[11px] text-blue-800 leading-relaxed">
+              ブラウザの「キャッシュ・Cookie・サイトデータの全消去」を実行すると、ブラウザ内（localStorage）の期の設定や店舗情報・取引データがリセットされます。
+              定期的に<strong>「完全JSONバックアップ」</strong>をダウンロードしておけば、キャッシュ消去後も1秒で期の設定と取引データを元通り復元できます。
+            </p>
+          </div>
+
           {successMessage && (
             <div className="flex items-center gap-2 p-3 text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
@@ -110,7 +127,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   <Download className="w-3.5 h-3.5 text-emerald-700" />
                 </div>
                 <p className="text-[11px] text-emerald-800">
-                  Excelで文字化けしないUTF-8 BOM付きでダウンロードします
+                  店舗列付き・Excelで文字化けしないUTF-8 BOM付きCSV
                 </p>
               </button>
 
@@ -122,12 +139,12 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-xs text-indigo-900 flex items-center gap-1.5">
                     <FileJson className="w-4 h-4 text-indigo-700" />
-                    JSONバックアップ
+                    完全JSONバックアップ
                   </span>
                   <Download className="w-3.5 h-3.5 text-indigo-700" />
                 </div>
                 <p className="text-[11px] text-indigo-800">
-                  すべての取引データ・属性・添付情報を完全保存します
+                  取引・決算期・店舗・科目をまるごと保存（推奨）
                 </p>
               </button>
             </div>
@@ -139,13 +156,13 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
               2. データ復元（インポート）
             </h3>
 
-            <label className="block p-4 border-2 border-dashed border-gray-300 hover:border-indigo-500 rounded-xl text-center cursor-pointer transition-colors bg-gray-50/50 hover:bg-indigo-50/30">
-              <Upload className="w-6 h-6 mx-auto text-gray-400 mb-1" />
-              <span className="text-xs font-bold text-indigo-600 block">
+            <label className="block p-4 border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-xl text-center cursor-pointer transition-colors bg-indigo-50/20 hover:bg-indigo-50/50">
+              <Upload className="w-6 h-6 mx-auto text-indigo-500 mb-1" />
+              <span className="text-xs font-bold text-indigo-700 block">
                 JSONバックアップファイルを選択して復元
               </span>
-              <span className="text-[10px] text-gray-400 block mt-0.5">
-                （以前保存した .json ファイルを取り込みます）
+              <span className="text-[10px] text-gray-500 block mt-0.5">
+                （以前保存した .json ファイルを選択すると、期の設定・店舗・取引がすべて復元されます）
               </span>
               <input
                 type="file"
@@ -166,7 +183,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm('仕様通りのデモサンプルデータ（2025年8月売上100万・経費16.5万）を再読み込みしますか？')) {
+                  if (confirm('デモサンプルデータを再読み込みしますか？')) {
                     onResetSampleData();
                     setSuccessMessage('デモサンプルデータを再読み込みしました');
                   }
