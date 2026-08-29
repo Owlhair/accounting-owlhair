@@ -35,6 +35,7 @@ export const DEFAULT_PAYMENT_METHODS = [
 ];
 
 export const DEFAULT_STORES = [
+  '太宰府店',
   '本店',
   '2号店',
   '全社共通',
@@ -244,11 +245,16 @@ export const loadSettings = (): AppSettings => {
       paymentMethods = [...paymentMethods, 'ポイント'];
     }
 
+    let stores = parsed.stores && parsed.stores.length > 0 ? parsed.stores : DEFAULT_STORES;
+    if (!stores.includes('太宰府店')) {
+      stores = ['太宰府店', ...stores];
+    }
+
     return {
       salesCategories: parsed.salesCategories || DEFAULT_SALES_CATEGORIES,
       expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods,
-      stores: parsed.stores && parsed.stores.length > 0 ? parsed.stores : DEFAULT_STORES,
+      stores,
       fiscalSettings: {
         fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
         fiscalYearStartYear: parsed.fiscalSettings?.fiscalYearStartYear ?? DEFAULT_FISCAL_SETTINGS.fiscalYearStartYear,

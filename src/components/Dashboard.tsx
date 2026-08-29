@@ -26,7 +26,7 @@ interface DashboardProps {
   onOpenAddSales: () => void;
   onOpenAddExpense: () => void;
   onOpenFiscalSettings: () => void;
-  onNavigateToTab: (tab: 'list' | 'scratch' | 'monthly') => void;
+  onNavigateToTab: (tab: 'cards' | 'list' | 'scratch' | 'monthly') => void;
   onEdit: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
   onDelete: (id: string) => void;
@@ -239,6 +239,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span>一覧で確認する</span>
             <ArrowRight className="w-3 h-3" />
           </div>
+        </div>
+      </div>
+
+      {/* Store Sales Cards Feature Banner */}
+      <div 
+        onClick={() => onNavigateToTab('cards')}
+        className="cursor-pointer bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-700 hover:from-emerald-700 hover:to-indigo-800 text-white rounded-2xl p-4 sm:p-5 shadow-xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-xs text-white shrink-0 group-hover:scale-105 transition-transform">
+            <Store className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-sm text-white">
+                店舗・月別 売上カードボード
+              </span>
+              <span className="text-[10px] font-black bg-white/25 px-2 py-0.5 rounded-full text-white">
+                おすすめ
+              </span>
+            </div>
+            <p className="text-xs text-emerald-100 mt-0.5 font-medium">
+              太宰府店などの各店舗カード（現金・クレジット・QR・振込）を埋めていくと、全社合計カードが自動完成！
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-emerald-900 rounded-xl text-xs font-black shadow-xs group-hover:bg-emerald-50 transition-colors shrink-0">
+          <span>カードボードを開く</span>
+          <ArrowRight className="w-3.5 h-3.5 text-emerald-700 group-hover:translate-x-0.5 transition-transform" />
         </div>
       </div>
 

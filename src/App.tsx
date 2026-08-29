@@ -30,6 +30,7 @@ import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { ScratchFlowView } from './components/ScratchFlowView';
 import { MonthlyAggregationView } from './components/MonthlyAggregationView';
+import { StoreSalesCardBoard } from './components/StoreSalesCardBoard';
 import { AddSalesModal } from './components/AddSalesModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
 import { TransactionEditModal } from './components/TransactionEditModal';
@@ -260,6 +261,53 @@ export default function App() {
     }
   };
 
+  // Handler: Save Store Sales Card (店舗・月別の売上カード保存)
+  const handleSaveStoreCard = (
+    month: string,
+    store: string,
+    breakdown: Record<string, number>,
+    memo?: string
+  ) => {
+    const [y, m] = month.split('-');
+    const lastDay = new Date(Number(y), Number(m), 0).getDate();
+    const dateFrom = `${month}-01`;
+    const dateTo = `${month}-${String(lastDay).padStart(2, '0')}`;
+    const timestamp = new Date().toISOString();
+
+    // Filter out existing monthly sales transactions for this store & month
+    const nonStoreMonthlyTx = transactions.filter(t => {
+      const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
+      const txStore = t.store || '全社共通';
+      return !(t.type === 'sales' && t.granularity === 'monthly' && txStore === store && txMonth === month);
+    });
+
+    // Create new transactions for each payment method in breakdown
+    const newItems: Transaction[] = [];
+    Object.entries(breakdown).forEach(([method, amount], idx) => {
+      if (amount > 0) {
+        newItems.push({
+          id: `tx-${month.replace('-', '')}-${store}-${method}-${Date.now()}-${idx}`,
+          date_from: dateFrom,
+          date_to: dateTo,
+          type: 'sales',
+          category: '技術売上',
+          store: store,
+          amount: amount,
+          payment_method: method,
+          granularity: 'monthly',
+          description: `${store} ${month} 売上 (${method})`,
+          memo: memo || `${store} ${month}度 売上カード`,
+          source_type: 'manual',
+          confirmed: true,
+          created_at: timestamp,
+          updated_at: timestamp,
+        });
+      }
+    });
+
+    setTransactions([...newItems, ...nonStoreMonthlyTx]);
+  };
+
   // Handler: Save Settings (Fiscal & Stores)
   const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[]) => {
     const isFiscalChanged =
@@ -365,6 +413,18 @@ export default function App() {
             onDelete={handleDeleteTransaction}
             onToggleConfirm={handleToggleConfirm}
             onQuoteInChat={handleQuoteInChat}
+          />
+        )}
+
+        {currentTab === 'cards' && (
+          <StoreSalesCardBoard
+            transactions={transactions}
+            settings={settings}
+            fiscalPeriods={fiscalPeriods}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
+            onSaveStoreCard={handleSaveStoreCard}
           />
         )}
 

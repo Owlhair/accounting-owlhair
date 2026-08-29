@@ -9,10 +9,11 @@ import {
   Sparkles,
   MessageSquareText,
   Users,
-  Download
+  Download,
+  Store
 } from 'lucide-react';
 
-export type NavTab = 'dashboard' | 'list' | 'scratch' | 'monthly';
+export type NavTab = 'dashboard' | 'cards' | 'list' | 'scratch' | 'monthly';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -79,6 +80,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
               ダッシュボード
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTabChange('cards')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                currentTab === 'cards'
+                  ? 'bg-white text-emerald-900 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5 text-emerald-600" />
+              売上カード (店舗×月)
             </button>
 
             <button
@@ -189,18 +203,25 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Mobile Navigation Tabs */}
-        <div className="md:hidden flex items-center justify-around border-t border-gray-100 py-1.5 text-xs font-bold">
+        <div className="md:hidden flex items-center justify-around border-t border-gray-100 py-1.5 text-xs font-bold overflow-x-auto">
           <button
             type="button"
             onClick={() => onTabChange('dashboard')}
-            className={`py-1 px-2 rounded-lg ${currentTab === 'dashboard' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
+            className={`py-1 px-2 rounded-lg shrink-0 ${currentTab === 'dashboard' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
           >
             ホーム
           </button>
           <button
             type="button"
+            onClick={() => onTabChange('cards')}
+            className={`py-1 px-2 rounded-lg shrink-0 flex items-center gap-1 ${currentTab === 'cards' ? 'text-emerald-700 font-extrabold' : 'text-gray-500'}`}
+          >
+            売上カード
+          </button>
+          <button
+            type="button"
             onClick={() => onTabChange('list')}
-            className={`py-1 px-2 rounded-lg flex items-center gap-1 ${currentTab === 'list' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
+            className={`py-1 px-2 rounded-lg shrink-0 flex items-center gap-1 ${currentTab === 'list' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
           >
             一覧
             {unconfirmedCount > 0 && (
@@ -212,21 +233,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={() => onTabChange('scratch')}
-            className={`py-1 px-2 rounded-lg ${currentTab === 'scratch' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
+            className={`py-1 px-2 rounded-lg shrink-0 ${currentTab === 'scratch' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
           >
             ブロック
           </button>
           <button
             type="button"
             onClick={() => onTabChange('monthly')}
-            className={`py-1 px-2 rounded-lg ${currentTab === 'monthly' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
+            className={`py-1 px-2 rounded-lg shrink-0 ${currentTab === 'monthly' ? 'text-indigo-600 font-extrabold' : 'text-gray-500'}`}
           >
             月別
           </button>
           <button
             type="button"
             onClick={onOpenChat}
-            className="py-1 px-2 rounded-lg text-indigo-600 font-bold flex items-center gap-0.5"
+            className="py-1 px-2 rounded-lg text-indigo-600 font-bold flex items-center gap-0.5 shrink-0"
           >
             チャット
             {chatMessageCount > 0 && (
