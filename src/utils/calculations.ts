@@ -36,40 +36,33 @@ export const getTransactionDate = (tx: Transaction): string => {
  * Generates available fiscal periods automatically based on:
  * - fiscalYearEndMonth (決算月 1-12)
  * - fiscalYearStartYear (第1期開始年)
- * - Earliest and latest transaction dates in the dataset
+ * - Actual transactions in the dataset and current real-world year
  */
 export const calculateFiscalPeriods = (
   transactions: Transaction[],
   settings: FiscalSettings
 ): FiscalPeriod[] => {
-  const { fiscalYearEndMonth, fiscalYearStartYear } = settings;
+  const { fiscalYearEndMonth, fiscalYearStartYear } = settings || { fiscalYearEndMonth: 3, fiscalYearStartYear: 2024 };
   const startMonthNum = (fiscalYearEndMonth % 12) + 1; // e.g., if endMonth=3 -> startMonth=4
 
-  // Find range of years from transactions & settings
-  let minYear = fiscalYearStartYear;
-  let maxYear = new Date().getFullYear() + 1;
-
+  // Determine latest year among actual transactions
+  let maxYearInTx = fiscalYearStartYear;
   transactions.forEach(tx => {
     const d = getTransactionDate(tx);
     if (d && d.length >= 4) {
       const y = parseInt(d.substring(0, 4), 10);
-      if (!isNaN(y)) {
-        if (y < minYear) minYear = y;
-        if (y > maxYear) maxYear = y;
+      if (!isNaN(y) && y > maxYearInTx) {
+        maxYearInTx = y;
       }
     }
   });
 
-  // Calculate periods from first year to maxYear + 1
+  // Calculate periods only up to the latest transaction year (or at most current year)
+  const currentCalYear = 2025;
+  const targetMaxYear = Math.max(maxYearInTx, currentCalYear);
+  const totalPeriodsToGenerate = Math.max(1, targetMaxYear - fiscalYearStartYear + 1);
+
   const periods: FiscalPeriod[] = [];
-  
-  // A fiscal period for periodNumber N:
-  // Starts in year: fiscalYearStartYear + (N - 1)
-  // Starts at month: startMonthNum
-  // Ends at month: fiscalYearEndMonth
-  // Ends in year: if startMonthNum > fiscalYearEndMonth, it spans into next calendar year (startYear + 1)
-  
-  const totalPeriodsToGenerate = Math.max(1, (maxYear - fiscalYearStartYear) + 3);
 
   for (let pNum = 1; pNum <= totalPeriodsToGenerate; pNum++) {
     const startCalYear = fiscalYearStartYear + (pNum - 1);
@@ -83,7 +76,7 @@ export const calculateFiscalPeriods = (
     const startDate = `${startMonthStr}-01`;
     const endDate = `${endMonthStr}-${String(lastDay).padStart(2, '0')}`;
 
-    // Collect all months belonging to this period
+    // Collect all 12 months belonging to this period
     const months: string[] = [];
     let curY = startCalYear;
     let curM = startMonthNum;
@@ -126,10 +119,6 @@ export const getFiscalPeriodForDate = (
 
 /**
  * Checks if a transaction falls within a selected period or month filter
- * filterId can be:
- * - 'ALL'
- * - 'period-X' (e.g. 'period-1')
- * - 'YYYY-MM' (e.g. '2025-08')
  */
 export const isTransactionInFilter = (
   tx: Transaction,

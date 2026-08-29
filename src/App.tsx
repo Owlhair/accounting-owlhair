@@ -49,13 +49,45 @@ export default function App() {
     return calculateFiscalPeriods(transactions, settings.fiscalSettings);
   }, [transactions, settings.fiscalSettings]);
 
-  // Selected filter (Defaults to the latest/current fiscal period key, e.g. "period-1")
+  // Selected filter (Defaults to the active period with data, or first period)
   const [selectedFilter, setSelectedFilter] = useState<string>(() => {
     const loaded = loadTransactions();
     const loadedSettings = loadSettings();
     const periods = calculateFiscalPeriods(loaded, loadedSettings.fiscalSettings);
     return periods[0]?.key || 'ALL';
   });
+
+  // Keep selected filter valid if periods update
+  useEffect(() => {
+    if (selectedFilter.startsWith('period-')) {
+      const exists = fiscalPeriods.some(p => p.key === selectedFilter);
+      if (!exists && fiscalPeriods.length > 0) {
+        setSelectedFilter(fiscalPeriods[0].key);
+      }
+    }
+  }, [fiscalPeriods, selectedFilter]);
+
+  // Active month for modals based on current view/filter
+  const activeInputMonth = useMemo(() => {
+    if (selectedFilter && selectedFilter !== 'ALL' && !selectedFilter.startsWith('period-')) {
+      return selectedFilter;
+    }
+    if (selectedFilter && selectedFilter.startsWith('period-')) {
+      const period = fiscalPeriods.find(p => p.key === selectedFilter);
+      if (period && period.months.length > 0) {
+        // Pick the most relevant month in this period (e.g. latest month that has transactions, or first)
+        const monthWithTx = period.months.slice().reverse().find(m => 
+          transactions.some(t => (t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
+        );
+        return monthWithTx || period.months[0];
+      }
+    }
+    if (transactions.length > 0) {
+      const d = transactions[0].date_from || transactions[0].date_to;
+      if (d && d.length >= 7) return d.substring(0, 7);
+    }
+    return '2025-08';
+  }, [selectedFilter, fiscalPeriods, transactions]);
 
   // Multi-user team chat states
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadChatMessages());
@@ -447,7 +479,7 @@ export default function App() {
         onAddTransactions={handleAddTransactions}
         settings={settings}
         onAddCategory={handleAddCategory}
-        defaultMonth={new Date().toISOString().slice(0, 7)}
+        defaultMonth={activeInputMonth}
       />
 
       <AddExpenseModal
@@ -456,7 +488,7 @@ export default function App() {
         onAddTransactions={handleAddTransactions}
         settings={settings}
         onAddCategory={handleAddCategory}
-        defaultMonth={new Date().toISOString().slice(0, 7)}
+        defaultMonth={activeInputMonth}
       />
 
       <TransactionEditModal
