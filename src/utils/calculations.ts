@@ -184,6 +184,7 @@ export const calculateSummary = (
   const bySalesCategory: Record<string, number> = {};
   const byExpenseCategory: Record<string, number> = {};
   const byPaymentMethod: Record<string, number> = {};
+  const byStore: Record<string, number> = {};
   
   const byGranularity: AggregationSummary['byGranularity'] = {
     monthly: { count: 0, totalSales: 0, totalExpenses: 0 },
@@ -216,6 +217,9 @@ export const calculateSummary = (
 
     const method = tx.payment_method || '未設定';
     byPaymentMethod[method] = (byPaymentMethod[method] || 0) + amt;
+
+    const store = tx.store || '未設定';
+    byStore[store] = (byStore[store] || 0) + amt;
   });
 
   return {
@@ -227,6 +231,7 @@ export const calculateSummary = (
     bySalesCategory,
     byExpenseCategory,
     byPaymentMethod,
+    byStore,
     byGranularity,
   };
 };

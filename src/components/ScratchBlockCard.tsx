@@ -68,6 +68,12 @@ export const ScratchBlockCard: React.FC<ScratchBlockCardProps> = ({
             {getGranularityLabel(transaction.granularity)}
           </span>
 
+          {transaction.store && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {transaction.store}
+            </span>
+          )}
+
           <span className="inline-flex items-center gap-1 text-xs text-gray-500">
             <Calendar className="w-3.5 h-3.5" />
             <span className="font-mono">{dateDisplay}</span>

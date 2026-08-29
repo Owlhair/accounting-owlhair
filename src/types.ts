@@ -22,6 +22,7 @@ export interface Transaction {
   subcategory?: string;
   amount: number;
   payment_method: string;
+  store?: string; // 店舗名 (例: 本店, 2号店, 共通など)
   granularity: Granularity;
   description: string;
   memo?: string;
@@ -33,14 +34,15 @@ export interface Transaction {
 }
 
 export interface FiscalSettings {
-  fiscalYearEndMonth: number; // 決算月 (1〜12, デフォルト例: 3月決算なら 3)
-  fiscalYearStartYear: number; // 設立年 / 第1期開始年 (例: 2020年なら2020)
+  fiscalYearEndMonth: number; // 決算月 (1〜12, デフォルト: 3月決算なら 3)
+  fiscalYearStartYear: number; // 設立年 / 第1期開始年 (例: 2024)
 }
 
 export interface AppSettings {
   salesCategories: string[];
   expenseCategories: string[];
   paymentMethods: string[];
+  stores: string[]; // 店舗リスト (例: ['全社共通', '本店', '2号店'])
   fiscalSettings: FiscalSettings;
 }
 
@@ -64,6 +66,7 @@ export interface AggregationSummary {
   bySalesCategory: Record<string, number>;
   byExpenseCategory: Record<string, number>;
   byPaymentMethod: Record<string, number>;
+  byStore: Record<string, number>;
   byGranularity: Record<Granularity, { count: number; totalSales: number; totalExpenses: number }>;
 }
 
@@ -101,6 +104,7 @@ export interface TransactionRef {
   category: string;
   confirmed: boolean;
   date_from?: string;
+  store?: string;
 }
 
 export interface ChatMessage {

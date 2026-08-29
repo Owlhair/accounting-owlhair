@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Transaction, AppSettings } from '../types';
 import { formatCurrency } from '../utils/calculations';
-import { X, Plus, Trash2, Tag, Sparkles, Check, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, Tag, Sparkles, Check, AlertCircle, Store } from 'lucide-react';
 
 interface AddExpenseModalProps {
   isOpen: boolean;
@@ -12,7 +12,7 @@ interface AddExpenseModalProps {
   defaultMonth?: string;
 }
 
-type InputMode = 'monthly_bulk' | 'receipt_batch' | 'period_total' | 'single';
+type InputMode = 'monthly_bulk' | 'receipt_batch' | 'single';
 
 export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   isOpen,
@@ -24,6 +24,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 }) => {
   const [mode, setMode] = useState<InputMode>('monthly_bulk');
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const [selectedStore, setSelectedStore] = useState(settings.stores[0] || '本店');
   const [paymentMethod, setPaymentMethod] = useState('クレジットカード');
   const [memo, setMemo] = useState('');
   const [confirmed, setConfirmed] = useState(true);
@@ -32,35 +33,33 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
 
   // Mode 1: Monthly bulk default rows for expenses
-  const [monthlyRows, setMonthlyRows] = useState<Array<{ category: string; amount: string; paymentMethod: string }>>([
-    { category: '仕入', amount: '120000', paymentMethod: '銀行振込' },
-    { category: '消耗品費', amount: '30000', paymentMethod: 'クレジットカード' },
-    { category: '通信費', amount: '15000', paymentMethod: 'クレジットカード' },
-    { category: '水道光熱費', amount: '', paymentMethod: '銀行振込' },
-    { category: '地代家賃', amount: '', paymentMethod: '銀行振込' },
-    { category: '旅費交通費', amount: '', paymentMethod: '現金' },
+  const [monthlyRows, setMonthlyRows] = useState<Array<{ category: string; amount: string; paymentMethod: string; store: string }>>([
+    { category: '地代家賃', amount: '250000', paymentMethod: '銀行振込', store: settings.stores[0] || '本店' },
+    { category: '仕入', amount: '145000', paymentMethod: 'クレジットカード', store: settings.stores[0] || '本店' },
+    { category: '水道光熱費', amount: '48000', paymentMethod: 'クレジットカード', store: settings.stores[0] || '本店' },
+    { category: '消耗品費', amount: '30000', paymentMethod: 'クレジットカード', store: settings.stores[0] || '本店' },
+    { category: '通信費', amount: '15000', paymentMethod: 'クレジットカード', store: settings.stores[0] || '本店' },
+    { category: '旅費交通費', amount: '', paymentMethod: '現金', store: '全社共通' },
+    { category: '広告宣伝費', amount: '', paymentMethod: 'クレジットカード', store: settings.stores[0] || '本店' },
+    { category: '外注費', amount: '', paymentMethod: '銀行振込', store: '全社共通' },
+    { category: 'その他', amount: '', paymentMethod: '現金', store: settings.stores[0] || '本店' },
   ]);
 
   // Mode 2: Receipt / Daily list
-  const [receiptRows, setReceiptRows] = useState<Array<{ date: string; store: string; category: string; amount: string; paymentMethod: string }>>([
-    { date: `${defaultMonth}-10`, store: 'ホームセンター', category: '消耗品費', amount: '12800', paymentMethod: '現金' },
-    { date: `${defaultMonth}-12`, store: 'JR東日本', category: '旅費交通費', amount: '3500', paymentMethod: 'クレジットカード' },
-    { date: `${defaultMonth}-18`, store: 'カフェ打合せ', category: 'その他', amount: '1200', paymentMethod: '現金' },
+  const [receiptRows, setReceiptRows] = useState<Array<{ date: string; storeName: string; store: string; category: string; amount: string; paymentMethod: string }>>([
+    { date: `${defaultMonth}-10`, storeName: 'ホームセンター', store: settings.stores[0] || '本店', category: '消耗品費', amount: '12800', paymentMethod: '現金' },
+    { date: `${defaultMonth}-12`, storeName: 'JR東日本', store: '全社共通', category: '旅費交通費', amount: '3500', paymentMethod: 'クレジットカード' },
+    { date: `${defaultMonth}-18`, storeName: 'カフェ打合せ', store: '全社共通', category: 'その他', amount: '1200', paymentMethod: '現金' },
   ]);
 
-  // Mode 3: Period total
-  const [periodDateFrom, setPeriodDateFrom] = useState(`${defaultMonth}-01`);
-  const [periodDateTo, setPeriodDateTo] = useState(`${defaultMonth}-31`);
-  const [periodCategory, setPeriodCategory] = useState('仕入');
-  const [periodAmount, setPeriodAmount] = useState('200000');
-  const [periodMemo, setPeriodMemo] = useState('請求書一括精算');
-
-  // Mode 4: Single receipt
+  // Mode 3: Single receipt
   const [singleDate, setSingleDate] = useState(`${defaultMonth}-15`);
+  const [singleStore, setSingleStore] = useState(settings.stores[0] || '本店');
   const [singleCategory, setSingleCategory] = useState('消耗品費');
+  const [singlePaymentMethod, setSinglePaymentMethod] = useState('クレジットカード');
   const [singleAmount, setSingleAmount] = useState('12800');
-  const [singleDescription, setSingleDescription] = useState('ホームセンター 事務用品・工具');
-  const [singleStore, setSingleStore] = useState('ホームセンター');
+  const [singleDescription, setSingleDescription] = useState('');
+  const [singleVendor, setSingleVendor] = useState('ホームセンター');
 
   if (!isOpen) return null;
 
@@ -80,7 +79,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     if (!newCatInput.trim()) return;
     onAddCategory(newCatInput.trim(), 'expense');
     if (mode === 'monthly_bulk') {
-      setMonthlyRows([...monthlyRows, { category: newCatInput.trim(), amount: '', paymentMethod }]);
+      setMonthlyRows([...monthlyRows, { category: newCatInput.trim(), amount: '', paymentMethod, store: selectedStore }]);
     }
     setNewCatInput('');
     setIsAddingCat(false);
@@ -92,6 +91,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
     try {
       const itemsToAdd: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>[] = [];
+      const [y, m] = selectedMonth.split('-');
+      const lastDay = new Date(Number(y), Number(m), 0).getDate();
+      const dateFrom = `${selectedMonth}-01`;
+      const dateTo = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
 
       if (mode === 'monthly_bulk') {
         const validRows = monthlyRows.filter(r => Number(r.amount.replace(/,/g, '')) > 0);
@@ -100,21 +103,17 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           return;
         }
 
-        const [y, m] = selectedMonth.split('-');
-        const lastDay = new Date(Number(y), Number(m), 0).getDate();
-        const dateFrom = `${selectedMonth}-01`;
-        const dateTo = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
-
         validRows.forEach(r => {
           itemsToAdd.push({
             date_from: dateFrom,
             date_to: dateTo,
             type: 'expense',
             category: r.category,
+            store: r.store || selectedStore,
             amount: Number(r.amount.replace(/,/g, '')),
             payment_method: r.paymentMethod || paymentMethod,
             granularity: 'monthly',
-            description: `${selectedMonth} ${r.category}（月まとめ）`,
+            description: `${r.store || selectedStore} ${selectedMonth} ${r.category}（月まとめ）`,
             memo: memo || '月次経費まとめ入力',
             source_type: 'manual',
             confirmed,
@@ -133,38 +132,15 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
             date_to: r.date,
             type: 'expense',
             category: r.category,
+            store: r.store || selectedStore,
             amount: Number(r.amount.replace(/,/g, '')),
             payment_method: r.paymentMethod,
             granularity: 'transaction',
-            description: r.store ? `${r.store} ${r.category}` : `${r.date} ${r.category}`,
-            memo: r.store ? `支払先: ${r.store}` : '',
+            description: r.storeName ? `${r.storeName} (${r.category})` : `${r.date} ${r.category}`,
+            memo: r.storeName ? `支払先: ${r.storeName}` : '',
             source_type: 'receipt',
             confirmed,
           });
-        });
-      } else if (mode === 'period_total') {
-        const amt = Number(periodAmount.replace(/,/g, ''));
-        if (isNaN(amt) || amt <= 0) {
-          setErrorMessage('有効な金額（1円以上）を入力してください。');
-          return;
-        }
-        if (!periodDateFrom || !periodDateTo) {
-          setErrorMessage('開始日と終了日を正しく入力してください。');
-          return;
-        }
-
-        itemsToAdd.push({
-          date_from: periodDateFrom,
-          date_to: periodDateTo,
-          type: 'expense',
-          category: periodCategory,
-          amount: amt,
-          payment_method: paymentMethod,
-          granularity: 'period',
-          description: `${periodDateFrom}〜${periodDateTo} ${periodCategory}`,
-          memo: periodMemo,
-          source_type: 'manual',
-          confirmed,
         });
       } else if (mode === 'single') {
         const amt = Number(singleAmount.replace(/,/g, ''));
@@ -182,11 +158,12 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           date_to: singleDate,
           type: 'expense',
           category: singleCategory,
+          store: singleStore,
           amount: amt,
-          payment_method: paymentMethod,
+          payment_method: singlePaymentMethod,
           granularity: 'transaction',
-          description: singleDescription || (singleStore ? `${singleStore} ${singleCategory}` : `${singleDate} ${singleCategory}`),
-          memo: singleStore ? `店舗/支払先: ${singleStore}` : memo,
+          description: singleDescription || (singleVendor ? `${singleVendor} (${singleCategory})` : `${singleDate} ${singleCategory}`),
+          memo: singleVendor ? `支払先: ${singleVendor}` : memo,
           source_type: 'receipt',
           confirmed,
         });
@@ -194,24 +171,29 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
 
       onAddTransactions(itemsToAdd);
       onClose();
-    } catch (err) {
-      setErrorMessage('保存時にエラーが発生しました: ' + (err as Error).message);
+    } catch (err: any) {
+      setErrorMessage('保存時にエラーが発生しました: ' + err.message);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-xl border border-amber-100 max-w-2xl w-full my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-3xl shadow-2xl border border-amber-100 max-w-2xl w-full my-6 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-amber-600 to-orange-700 p-4 sm:p-5 text-white flex items-center justify-between">
+        <div className="bg-slate-50 p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-white/15 rounded-xl backdrop-blur-xs">
-              <Sparkles className="w-5 h-5 text-amber-200" />
+            <div className="p-2 bg-amber-50 text-amber-700 rounded-xl">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight">経費を追加する</h2>
-              <p className="text-xs text-amber-100 mt-0.5">
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                経費の一括 / 単体登録
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                  店舗・決済種別対応
+                </span>
+              </h2>
+              <p className="text-xs text-gray-500">
                 月間の科目別まとめや領収書など、手元の領収書・通帳に合わせて入力できます
               </p>
             </div>
@@ -219,64 +201,53 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-white/20 text-amber-100 hover:text-white transition-colors"
+            className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Mode Selector Tabs */}
-        <div className="bg-amber-50/70 p-2 border-b border-amber-100 flex gap-1.5 overflow-x-auto text-xs sm:text-sm">
+        <div className="bg-gray-50/70 px-6 pt-3 border-b border-gray-100 flex gap-2 overflow-x-auto text-xs">
           <button
             type="button"
             onClick={() => setMode('monthly_bulk')}
-            className={`px-3 py-2 rounded-lg font-medium transition-all shrink-0 ${
+            className={`px-3.5 py-2 rounded-t-xl font-bold transition-all border-b-2 whitespace-nowrap ${
               mode === 'monthly_bulk'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-amber-950 hover:bg-amber-100/70'
+                ? 'bg-white text-amber-700 border-amber-600 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800 border-transparent'
             }`}
           >
-            📊 月まとめで入力（推奨）
+            📊 科目別月次まとめ
           </button>
           <button
             type="button"
             onClick={() => setMode('receipt_batch')}
-            className={`px-3 py-2 rounded-lg font-medium transition-all shrink-0 ${
+            className={`px-3.5 py-2 rounded-t-xl font-bold transition-all border-b-2 whitespace-nowrap ${
               mode === 'receipt_batch'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-amber-950 hover:bg-amber-100/70'
+                ? 'bg-white text-amber-700 border-amber-600 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800 border-transparent'
             }`}
           >
             🧾 領収書・明細まとめ
           </button>
           <button
             type="button"
-            onClick={() => setMode('period_total')}
-            className={`px-3 py-2 rounded-lg font-medium transition-all shrink-0 ${
-              mode === 'period_total'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-amber-950 hover:bg-amber-100/70'
-            }`}
-          >
-            📑 期間・概算まとめ
-          </button>
-          <button
-            type="button"
             onClick={() => setMode('single')}
-            className={`px-3 py-2 rounded-lg font-medium transition-all shrink-0 ${
+            className={`px-3.5 py-2 rounded-t-xl font-bold transition-all border-b-2 whitespace-nowrap ${
               mode === 'single'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-amber-950 hover:bg-amber-100/70'
+                ? 'bg-white text-amber-700 border-amber-600 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800 border-transparent'
             }`}
           >
-            ✏️ 個別領収書入力
+            ✏️ 個別経費入力
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           {errorMessage && (
-            <div className="flex items-center gap-2 p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-lg">
+            <div className="flex items-center gap-2 p-3 text-xs bg-rose-50 border border-rose-200 text-rose-700 rounded-xl">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
@@ -285,23 +256,38 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
           {/* MODE 1: MONTHLY BULK */}
           {mode === 'monthly_bulk' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-amber-50/40 p-3.5 rounded-xl border border-amber-100">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-200/80">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">対象年月</label>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">対象年月</label>
                   <input
                     type="month"
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    className="w-full text-xs font-bold font-mono px-2.5 py-1.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">基本支払方法</label>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1 flex items-center gap-1">
+                    <Store className="w-3 h-3 text-indigo-600" />
+                    デフォルト店舗
+                  </label>
+                  <select
+                    value={selectedStore}
+                    onChange={(e) => setSelectedStore(e.target.value)}
+                    className="w-full text-xs font-bold px-2.5 py-1.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  >
+                    {settings.stores.map(st => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">基本支払方法</label>
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full text-sm px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    className="w-full text-xs font-bold px-2.5 py-1.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                   >
                     {settings.paymentMethods.map(m => (
                       <option key={m} value={m}>{m}</option>
@@ -327,7 +313,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 </div>
 
                 {isAddingCat && (
-                  <div className="flex gap-2 mb-3 p-2 bg-amber-50 rounded-lg border border-amber-200 animate-in fade-in">
+                  <div className="flex gap-2 mb-3 p-2 bg-amber-50 rounded-xl border border-amber-200 animate-in fade-in">
                     <input
                       type="text"
                       placeholder="新しい経費科目（例: 会議費, 研修費）"
@@ -338,373 +324,274 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                     <button
                       type="button"
                       onClick={handleAddNewCategory}
-                      className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700"
+                      className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-bold"
                     >
                       追加
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingCat(false)}
-                      className="px-2 py-1.5 text-gray-500 text-xs hover:bg-gray-200 rounded"
-                    >
-                      キャンセル
                     </button>
                   </div>
                 )}
 
-                <div className="space-y-2">
+                <div className="space-y-2 border border-gray-200 rounded-2xl p-3 bg-white max-h-64 overflow-y-auto">
                   {monthlyRows.map((row, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-gray-50/70 p-2.5 rounded-xl border border-gray-200">
-                      <div className="w-1/3 text-xs font-bold text-gray-800 truncate" title={row.category}>
-                        {row.category}
-                      </div>
-                      <div className="relative flex-1">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">¥</span>
+                    <div key={row.category} className="flex items-center gap-2">
+                      <span className="w-24 text-xs font-bold text-gray-700 truncate">{row.category}</span>
+                      <select
+                        value={row.store || selectedStore}
+                        onChange={(e) => {
+                          const next = [...monthlyRows];
+                          next[idx].store = e.target.value;
+                          setMonthlyRows(next);
+                        }}
+                        className="w-24 px-2 py-1 text-[11px] bg-gray-50 border border-gray-200 rounded-lg"
+                      >
+                        {settings.stores.map(st => (
+                          <option key={st} value={st}>{st}</option>
+                        ))}
+                      </select>
+                      <div className="flex-1 relative">
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
                           placeholder="0"
-                          min="0"
-                          value={row.amount}
+                          value={row.amount ? Number(row.amount.replace(/,/g, '')).toLocaleString() : ''}
                           onChange={(e) => {
-                            const newRows = [...monthlyRows];
-                            newRows[idx].amount = e.target.value;
-                            setMonthlyRows(newRows);
+                            const raw = e.target.value.replace(/[^0-9]/g, '');
+                            const next = [...monthlyRows];
+                            next[idx].amount = raw;
+                            setMonthlyRows(next);
                           }}
-                          className="w-full pl-6 pr-2 py-1.5 text-sm font-mono font-bold bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-hidden text-right"
+                          className="w-full px-2.5 py-1 text-right font-mono font-bold text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-amber-500"
                         />
                       </div>
                       <select
                         value={row.paymentMethod}
                         onChange={(e) => {
-                          const newRows = [...monthlyRows];
-                          newRows[idx].paymentMethod = e.target.value;
-                          setMonthlyRows(newRows);
+                          const next = [...monthlyRows];
+                          next[idx].paymentMethod = e.target.value;
+                          setMonthlyRows(next);
                         }}
-                        className="w-28 text-xs py-1.5 px-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        className="w-28 px-2 py-1 text-[11px] bg-gray-50 border border-gray-200 rounded-lg"
                       >
-                        {settings.paymentMethods.map(m => (
-                          <option key={m} value={m}>{m}</option>
+                        {settings.paymentMethods.map(pm => (
+                          <option key={pm} value={pm}>{pm}</option>
                         ))}
                       </select>
-                      <button
-                        type="button"
-                        onClick={() => setMonthlyRows(monthlyRows.filter((_, i) => i !== idx))}
-                        className="text-gray-400 hover:text-rose-500 p-1"
-                        title="行を削除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                   ))}
                 </div>
 
-                <div className="pt-2 flex justify-start">
-                  <button
-                    type="button"
-                    onClick={() => setMonthlyRows([...monthlyRows, { category: settings.expenseCategories[0] || '仕入', amount: '', paymentMethod }])}
-                    className="text-xs font-medium text-amber-700 hover:text-amber-800 flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    別の科目を追加
-                  </button>
-                </div>
-
-                {/* Live total display */}
-                <div className="mt-3 p-3 bg-amber-100/70 rounded-xl border border-amber-200 flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-950">
-                    {selectedMonth} 経費合計（見込み）:
-                  </span>
-                  <span className="text-lg font-extrabold font-mono text-amber-900">
-                    {formatCurrency(monthlyTotal)}
-                  </span>
+                <div className="mt-2.5 flex items-center justify-between p-2.5 bg-amber-50/80 rounded-xl text-xs font-bold text-amber-950">
+                  <span>月次経費合計:</span>
+                  <span className="font-mono text-sm">{formatCurrency(monthlyTotal)}</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* MODE 2: RECEIPT / DAILY BATCH */}
+          {/* MODE 2: RECEIPT BATCH */}
           {mode === 'receipt_batch' && (
             <div className="space-y-3">
-              <p className="text-xs text-gray-500">
-                領収書やレシートの束を日付・店舗・金額順にまとめて登録できます。
-              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-700">領収書・明細一覧</span>
+                <button
+                  type="button"
+                  onClick={() => setReceiptRows([...receiptRows, {
+                    date: `${selectedMonth}-01`,
+                    storeName: '',
+                    store: selectedStore,
+                    category: settings.expenseCategories[0] || '消耗品費',
+                    amount: '',
+                    paymentMethod: 'クレジットカード'
+                  }])}
+                  className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  行を追加
+                </button>
+              </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {receiptRows.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200 items-center">
+                  <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs">
                     <input
                       type="date"
                       value={row.date}
                       onChange={(e) => {
-                        const newRows = [...receiptRows];
-                        newRows[idx].date = e.target.value;
-                        setReceiptRows(newRows);
+                        const next = [...receiptRows];
+                        next[idx].date = e.target.value;
+                        setReceiptRows(next);
                       }}
-                      className="sm:col-span-3 text-xs p-1.5 border rounded bg-white"
-                      required
+                      className="w-28 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-mono"
                     />
-                    <input
-                      type="text"
-                      placeholder="店舗/支払先"
+                    <select
                       value={row.store}
                       onChange={(e) => {
-                        const newRows = [...receiptRows];
-                        newRows[idx].store = e.target.value;
-                        setReceiptRows(newRows);
+                        const next = [...receiptRows];
+                        next[idx].store = e.target.value;
+                        setReceiptRows(next);
                       }}
-                      className="sm:col-span-3 text-xs p-1.5 border rounded bg-white"
+                      className="w-20 px-2 py-1 bg-white border border-gray-200 rounded-lg text-[11px]"
+                    >
+                      {settings.stores.map(st => (
+                        <option key={st} value={st}>{st}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="支払先（例: ホームセンター）"
+                      value={row.storeName}
+                      onChange={(e) => {
+                        const next = [...receiptRows];
+                        next[idx].storeName = e.target.value;
+                        setReceiptRows(next);
+                      }}
+                      className="w-28 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs"
                     />
                     <select
                       value={row.category}
                       onChange={(e) => {
-                        const newRows = [...receiptRows];
-                        newRows[idx].category = e.target.value;
-                        setReceiptRows(newRows);
+                        const next = [...receiptRows];
+                        next[idx].category = e.target.value;
+                        setReceiptRows(next);
                       }}
-                      className="sm:col-span-2 text-xs p-1.5 border rounded bg-white"
+                      className="w-24 px-2 py-1 bg-white border border-gray-200 rounded-lg text-[11px]"
                     >
-                      {settings.expenseCategories.map(c => (
-                        <option key={c} value={c}>{c}</option>
+                      {settings.expenseCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
-                    <div className="sm:col-span-2 relative">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">¥</span>
-                      <input
-                        type="number"
-                        placeholder="金額"
-                        value={row.amount}
-                        onChange={(e) => {
-                          const newRows = [...receiptRows];
-                          newRows[idx].amount = e.target.value;
-                          setReceiptRows(newRows);
-                        }}
-                        className="w-full pl-5 pr-1 py-1 text-xs font-mono font-bold bg-white border rounded text-right"
-                      />
-                    </div>
-                    <select
-                      value={row.paymentMethod}
+                    <input
+                      type="text"
+                      placeholder="金額"
+                      value={row.amount ? Number(row.amount.replace(/,/g, '')).toLocaleString() : ''}
                       onChange={(e) => {
-                        const newRows = [...receiptRows];
-                        newRows[idx].paymentMethod = e.target.value;
-                        setReceiptRows(newRows);
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        const next = [...receiptRows];
+                        next[idx].amount = raw;
+                        setReceiptRows(next);
                       }}
-                      className="sm:col-span-1 text-xs p-1.5 border rounded bg-white"
+                      className="w-24 px-2 py-1 text-right font-mono font-bold bg-white border border-gray-200 rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setReceiptRows(receiptRows.filter((_, i) => i !== idx))}
+                      className="p-1 text-gray-400 hover:text-rose-600"
                     >
-                      {settings.paymentMethods.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                    <div className="sm:col-span-1 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setReceiptRows(receiptRows.filter((_, i) => i !== idx))}
-                        className="text-gray-400 hover:text-rose-600 p-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
-              </div>
-
-              <div className="flex justify-between items-center pt-2">
-                <button
-                  type="button"
-                  onClick={() => setReceiptRows([...receiptRows, { date: `${selectedMonth}-15`, store: '', category: '消耗品費', amount: '', paymentMethod: '現金' }])}
-                  className="text-xs font-medium text-amber-700 hover:text-amber-800 flex items-center gap-1 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  領収書行を追加
-                </button>
-                <div className="text-xs font-bold text-gray-700">
-                  経費合計: <span className="font-mono text-amber-700 text-sm font-extrabold">{formatCurrency(receiptTotal)}</span>
-                </div>
               </div>
             </div>
           )}
 
-          {/* MODE 3: PERIOD / ESTIMATE */}
-          {mode === 'period_total' && (
-            <div className="space-y-3 bg-amber-50/30 p-3.5 rounded-xl border border-amber-100">
-              <div className="text-xs text-amber-900 bg-amber-100/60 p-2.5 rounded-lg">
-                💡 「今月の仕入請求書合計20万円」「通信費一括」など、期間の合計額を1件として登録できます。
-              </div>
-
+          {/* MODE 3: SINGLE EXPENSE */}
+          {mode === 'single' && (
+            <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">期間（開始日）</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">取引日</label>
                   <input
                     type="date"
-                    value={periodDateFrom}
-                    onChange={(e) => setPeriodDateFrom(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                    required
+                    value={singleDate}
+                    onChange={(e) => setSingleDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold font-mono focus:bg-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">期間（終了日）</label>
-                  <input
-                    type="date"
-                    value={periodDateTo}
-                    onChange={(e) => setPeriodDateTo(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">経費科目</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">店舗・部門</label>
                   <select
-                    value={periodCategory}
-                    onChange={(e) => setPeriodCategory(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
+                    value={singleStore}
+                    onChange={(e) => setSingleStore(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:bg-white"
                   >
-                    {settings.expenseCategories.map(c => (
-                      <option key={c} value={c}>{c}</option>
+                    {settings.stores.map(st => (
+                      <option key={st} value={st}>{st}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">金額 (円)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">¥</span>
-                    <input
-                      type="number"
-                      placeholder="200000"
-                      min="0"
-                      value={periodAmount}
-                      onChange={(e) => setPeriodAmount(e.target.value)}
-                      className="w-full pl-7 pr-3 py-2 text-sm font-mono font-bold border rounded-lg bg-white text-right"
-                      required
-                    />
-                  </div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">経費科目</label>
+                  <select
+                    value={singleCategory}
+                    onChange={(e) => setSingleCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:bg-white"
+                  >
+                    {settings.expenseCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">決済方法</label>
+                  <select
+                    value={singlePaymentMethod}
+                    onChange={(e) => setSinglePaymentMethod(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:bg-white"
+                  >
+                    {settings.paymentMethods.map(pm => (
+                      <option key={pm} value={pm}>{pm}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">集計メモ</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">金額</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="例: 12,800"
+                    value={singleAmount ? Number(singleAmount.replace(/,/g, '')).toLocaleString() : ''}
+                    onChange={(e) => setSingleAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="w-full px-3 py-2.5 text-base font-bold font-mono bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                  />
+                  <span className="absolute right-3.5 top-2.5 text-xs font-bold text-gray-400">円</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">支払先 / 購入店</label>
                 <input
                   type="text"
-                  placeholder="例: 問屋一括請求分 / 通帳引き落とし合算"
-                  value={periodMemo}
-                  onChange={(e) => setPeriodMemo(e.target.value)}
-                  className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
+                  placeholder="例: ホームセンター、JR東日本、NTT東日本など"
+                  value={singleVendor}
+                  onChange={(e) => setSingleVendor(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:bg-white"
                 />
               </div>
             </div>
           )}
 
-          {/* MODE 4: SINGLE RECEIPT */}
-          {mode === 'single' && (
-            <div className="space-y-3 bg-gray-50/50 p-3.5 rounded-xl border border-gray-200">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">日付</label>
-                  <input
-                    type="date"
-                    value={singleDate}
-                    onChange={(e) => setSingleDate(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">経費科目</label>
-                  <select
-                    value={singleCategory}
-                    onChange={(e) => setSingleCategory(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                  >
-                    {settings.expenseCategories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">金額 (円)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">¥</span>
-                    <input
-                      type="number"
-                      placeholder="12800"
-                      min="0"
-                      value={singleAmount}
-                      onChange={(e) => setSingleAmount(e.target.value)}
-                      className="w-full pl-7 pr-3 py-2 text-sm font-mono font-bold border rounded-lg bg-white text-right"
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">支払方法</label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                  >
-                    {settings.paymentMethods.map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">店舗 / 支払先</label>
-                  <input
-                    type="text"
-                    placeholder="例: ホームセンター コーナン"
-                    value={singleStore}
-                    onChange={(e) => setSingleStore(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">内容 / 摘要</label>
-                  <input
-                    type="text"
-                    placeholder="例: 事務備品・作業用手袋"
-                    value={singleDescription}
-                    onChange={(e) => setSingleDescription(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 border rounded-lg bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Common Footer Settings */}
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-gray-700">
+          {/* Confirm Status Checkbox */}
+          <div className="pt-2 flex items-center justify-between border-t border-gray-100">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
-                className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-gray-300"
               />
-              <span>確認済みとして登録する</span>
+              <span className="text-xs font-bold text-gray-700">
+                確認済（レシート精算済）として登録
+              </span>
             </label>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
               >
                 キャンセル
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs sm:text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs hover:shadow transition-all flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
-                経費データを登録
+                経費を登録する
               </button>
             </div>
           </div>

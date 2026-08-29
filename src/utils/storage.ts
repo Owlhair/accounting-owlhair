@@ -26,11 +26,18 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
 
 export const DEFAULT_PAYMENT_METHODS = [
   '現金',
-  '銀行振込',
   'クレジットカード',
   'QR決済',
+  'ポイント',
+  '銀行振込',
   '未確定',
   'その他',
+];
+
+export const DEFAULT_STORES = [
+  '本店',
+  '2号店',
+  '全社共通',
 ];
 
 export const DEFAULT_FISCAL_SETTINGS = {
@@ -39,18 +46,70 @@ export const DEFAULT_FISCAL_SETTINGS = {
 };
 
 export const SAMPLE_TRANSACTIONS: Transaction[] = [
-  // 2025年8月 月間売上 (技術売上: 850,000, 商品売上: 120,000, その他: 30,000 -> 合計 1,000,000円)
+  // 2025年8月 本店 技術売上 (クレジット: 550,000, 現金: 200,000, QR決済: 100,000, ポイント: 20,000)
   {
-    id: 'tx-202508-sales-tech',
+    id: 'tx-202508-sales-tech-card',
     date_from: '2025-08-01',
     date_to: '2025-08-31',
     type: 'sales',
     category: '技術売上',
-    amount: 850000,
-    payment_method: '銀行振込',
+    store: '本店',
+    amount: 550000,
+    payment_method: 'クレジットカード',
     granularity: 'monthly',
-    description: '2025年8月 技術売上（月まとめ）',
-    memo: '月次売上集計表より',
+    description: '本店 8月技術売上 (クレジットカード)',
+    memo: 'POS月次集計',
+    source_type: 'manual',
+    confirmed: true,
+    created_at: '2025-08-31T18:00:00.000Z',
+    updated_at: '2025-08-31T18:00:00.000Z',
+  },
+  {
+    id: 'tx-202508-sales-tech-cash',
+    date_from: '2025-08-01',
+    date_to: '2025-08-31',
+    type: 'sales',
+    category: '技術売上',
+    store: '本店',
+    amount: 200000,
+    payment_method: '現金',
+    granularity: 'monthly',
+    description: '本店 8月技術売上 (現金売上)',
+    memo: 'レジ締め月次合計',
+    source_type: 'manual',
+    confirmed: true,
+    created_at: '2025-08-31T18:00:00.000Z',
+    updated_at: '2025-08-31T18:00:00.000Z',
+  },
+  {
+    id: 'tx-202508-sales-tech-qr',
+    date_from: '2025-08-01',
+    date_to: '2025-08-31',
+    type: 'sales',
+    category: '技術売上',
+    store: '本店',
+    amount: 100000,
+    payment_method: 'QR決済',
+    granularity: 'monthly',
+    description: '本店 8月技術売上 (PayPay/LINE Pay等)',
+    memo: 'QR決済ポータルより',
+    source_type: 'manual',
+    confirmed: true,
+    created_at: '2025-08-31T18:00:00.000Z',
+    updated_at: '2025-08-31T18:00:00.000Z',
+  },
+  {
+    id: 'tx-202508-sales-tech-point',
+    date_from: '2025-08-01',
+    date_to: '2025-08-31',
+    type: 'sales',
+    category: '技術売上',
+    store: '本店',
+    amount: 20000,
+    payment_method: 'ポイント',
+    granularity: 'monthly',
+    description: '本店 8月技術売上 (ポイント利用分)',
+    memo: 'ポイント利用充当',
     source_type: 'manual',
     confirmed: true,
     created_at: '2025-08-31T18:00:00.000Z',
@@ -62,15 +121,16 @@ export const SAMPLE_TRANSACTIONS: Transaction[] = [
     date_to: '2025-08-31',
     type: 'sales',
     category: '商品売上',
+    store: '本店',
     amount: 120000,
     payment_method: 'クレジットカード',
     granularity: 'monthly',
-    description: '2025年8月 商品売上（月まとめ）',
-    memo: 'POSレジ月間データ',
+    description: '本店 8月商品売上（店販シャンプー・トリートメント等）',
+    memo: '店販POS集計',
     source_type: 'manual',
     confirmed: true,
-    created_at: '2025-08-31T18:05:00.000Z',
-    updated_at: '2025-08-31T18:05:00.000Z',
+    created_at: '2025-08-31T18:00:00.000Z',
+    updated_at: '2025-08-31T18:00:00.000Z',
   },
   {
     id: 'tx-202508-sales-other',
@@ -78,95 +138,81 @@ export const SAMPLE_TRANSACTIONS: Transaction[] = [
     date_to: '2025-08-31',
     type: 'sales',
     category: 'その他売上',
+    store: '全社共通',
     amount: 30000,
-    payment_method: '現金',
-    granularity: 'monthly',
-    description: '2025年8月 その他売上（月まとめ）',
-    memo: 'ワークショップ参加費等',
-    source_type: 'manual',
-    confirmed: true,
-    created_at: '2025-08-31T18:10:00.000Z',
-    updated_at: '2025-08-31T18:10:00.000Z',
-  },
-  // 2025年8月 経費 (仕入: 120,000, 消耗品費: 30,000, 通信費: 15,000 -> 合計 165,000円)
-  {
-    id: 'tx-202508-exp-stock',
-    date_from: '2025-08-01',
-    date_to: '2025-08-31',
-    type: 'expense',
-    category: '仕入',
-    amount: 120000,
     payment_method: '銀行振込',
     granularity: 'monthly',
-    description: '2025年8月 商品・資材仕入',
-    memo: '問屋一括請求分',
+    description: '8月その他売上（講習講師料など）',
+    memo: '',
     source_type: 'manual',
     confirmed: true,
-    created_at: '2025-08-31T19:00:00.000Z',
-    updated_at: '2025-08-31T19:00:00.000Z',
+    created_at: '2025-08-31T18:00:00.000Z',
+    updated_at: '2025-08-31T18:00:00.000Z',
+  },
+  {
+    id: 'tx-202508-exp-rent',
+    date_from: '2025-08-01',
+    date_to: '2025-08-01',
+    type: 'expense',
+    category: '地代家賃',
+    store: '本店',
+    amount: 250000,
+    payment_method: '銀行振込',
+    granularity: 'monthly',
+    description: '本店 8月分店舗家賃',
+    memo: '毎月自動振込',
+    source_type: 'bank',
+    confirmed: true,
+    created_at: '2025-08-01T09:00:00.000Z',
+    updated_at: '2025-08-01T09:00:00.000Z',
   },
   {
     id: 'tx-202508-exp-supplies',
-    date_from: '2025-08-01',
-    date_to: '2025-08-31',
+    date_from: '2025-08-10',
+    date_to: '2025-08-10',
     type: 'expense',
-    category: '消耗品費',
-    amount: 30000,
+    category: '仕入',
+    store: '本店',
+    amount: 145000,
     payment_method: 'クレジットカード',
-    granularity: 'monthly',
-    description: '2025年8月 事務備品・消耗品',
-    memo: '通販まとめ買い',
-    source_type: 'card',
-    confirmed: true,
-    created_at: '2025-08-31T19:10:00.000Z',
-    updated_at: '2025-08-31T19:10:00.000Z',
-  },
-  {
-    id: 'tx-202508-exp-comm',
-    date_from: '2025-08-01',
-    date_to: '2025-08-31',
-    type: 'expense',
-    category: '通信費',
-    amount: 15000,
-    payment_method: 'クレジットカード',
-    granularity: 'monthly',
-    description: '2025年8月 光回線・スマホ料金',
-    memo: '口座振替・カード明細',
-    source_type: 'card',
-    confirmed: true,
-    created_at: '2025-08-31T19:20:00.000Z',
-    updated_at: '2025-08-31T19:20:00.000Z',
-  },
-  {
-    id: 'tx-20250815-receipt-hc',
-    date_from: '2025-08-15',
-    date_to: '2025-08-15',
-    type: 'expense',
-    category: '消耗品費',
-    amount: 12800,
-    payment_method: '現金',
     granularity: 'transaction',
-    description: 'ホームセンター 備品購入',
-    memo: '領収書No.4820',
+    description: 'カラー剤・パーマ液・シャンプー等材料仕入',
+    memo: 'ディーラー請求分',
     source_type: 'receipt',
+    confirmed: true,
+    created_at: '2025-08-10T14:00:00.000Z',
+    updated_at: '2025-08-10T14:00:00.000Z',
+  },
+  {
+    id: 'tx-202508-exp-util',
+    date_from: '2025-08-25',
+    date_to: '2025-08-25',
+    type: 'expense',
+    category: '水道光熱費',
+    store: '本店',
+    amount: 48000,
+    payment_method: 'クレジットカード',
+    granularity: 'monthly',
+    description: '本店 電気・ガス・水道代（8月引き落とし分）',
+    memo: '',
+    source_type: 'card',
     confirmed: false,
-    created_at: '2025-08-15T10:30:00.000Z',
-    updated_at: '2025-08-15T10:30:00.000Z',
-  }
+    created_at: '2025-08-25T11:00:00.000Z',
+    updated_at: '2025-08-25T11:00:00.000Z',
+  },
 ];
 
 export const loadTransactions = (): Transaction[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_TRANSACTIONS);
     if (!raw) {
-      // Default to clean empty slate for real production usage
-      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify([]));
-      return [];
+      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(SAMPLE_TRANSACTIONS));
+      return SAMPLE_TRANSACTIONS;
     }
     return JSON.parse(raw);
   } catch (err) {
-    console.error('Failed to load transactions from localStorage:', err);
-    return [];
+    console.error('Failed to load transactions:', err);
+    return SAMPLE_TRANSACTIONS;
   }
 };
 
@@ -174,7 +220,7 @@ export const saveTransactions = (transactions: Transaction[]): void => {
   try {
     localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(transactions));
   } catch (err) {
-    console.error('Failed to save transactions to localStorage:', err);
+    console.error('Failed to save transactions:', err);
   }
 };
 
@@ -186,16 +232,25 @@ export const loadSettings = (): AppSettings => {
         salesCategories: DEFAULT_SALES_CATEGORIES,
         expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
         paymentMethods: DEFAULT_PAYMENT_METHODS,
+        stores: DEFAULT_STORES,
         fiscalSettings: DEFAULT_FISCAL_SETTINGS,
       };
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(initialSettings));
       return initialSettings;
     }
     const parsed = JSON.parse(raw);
+    
+    // Ensure 'ポイント' is included in paymentMethods even if existing user data didn't have it
+    let paymentMethods = parsed.paymentMethods || DEFAULT_PAYMENT_METHODS;
+    if (!paymentMethods.includes('ポイント')) {
+      paymentMethods = [...paymentMethods, 'ポイント'];
+    }
+
     return {
       salesCategories: parsed.salesCategories || DEFAULT_SALES_CATEGORIES,
       expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
-      paymentMethods: parsed.paymentMethods || DEFAULT_PAYMENT_METHODS,
+      paymentMethods,
+      stores: parsed.stores && parsed.stores.length > 0 ? parsed.stores : DEFAULT_STORES,
       fiscalSettings: {
         fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
         fiscalYearStartYear: parsed.fiscalSettings?.fiscalYearStartYear ?? DEFAULT_FISCAL_SETTINGS.fiscalYearStartYear,
@@ -207,6 +262,7 @@ export const loadSettings = (): AppSettings => {
       salesCategories: DEFAULT_SALES_CATEGORIES,
       expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods: DEFAULT_PAYMENT_METHODS,
+      stores: DEFAULT_STORES,
       fiscalSettings: DEFAULT_FISCAL_SETTINGS,
     };
   }

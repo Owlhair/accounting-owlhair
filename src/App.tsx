@@ -34,7 +34,7 @@ import { AddSalesModal } from './components/AddSalesModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
 import { TransactionEditModal } from './components/TransactionEditModal';
 import { DataBackupModal } from './components/DataBackupModal';
-import { FiscalYearSettingsModal } from './components/FiscalYearSettingsModal';
+import { SettingsModal } from './components/SettingsModal';
 import { TeamChatDrawer } from './components/TeamChatDrawer';
 import { PwaInstallPromptModal } from './components/PwaInstallPromptModal';
 import { MessageSquareText } from 'lucide-react';
@@ -241,6 +241,14 @@ export default function App() {
     }
   };
 
+  // Handler: Save Stores
+  const handleSaveStores = (newStores: string[]) => {
+    setSettings(prev => ({
+      ...prev,
+      stores: newStores,
+    }));
+  };
+
   // Handler: Reset to Sample Demo Data
   const handleResetSampleData = () => {
     const data = resetToSampleData();
@@ -430,11 +438,13 @@ export default function App() {
         onAddCategory={handleAddCategory}
       />
 
-      <FiscalYearSettingsModal
+      <SettingsModal
         isOpen={isFiscalSettingsOpen}
         onClose={() => setIsFiscalSettingsOpen(false)}
         fiscalSettings={settings.fiscalSettings}
-        onSave={handleSaveFiscalSettings}
+        stores={settings.stores}
+        onSaveFiscalSettings={handleSaveFiscalSettings}
+        onSaveStores={handleSaveStores}
       />
 
       <DataBackupModal

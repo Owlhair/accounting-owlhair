@@ -10,10 +10,11 @@ import {
   Plus, 
   ArrowRight, 
   Layers, 
-  Calendar,
   CheckCircle2,
   SlidersHorizontal,
-  Building2
+  Building2,
+  Store,
+  CreditCard
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -62,42 +63,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return m === selectedFilter;
   });
 
-  const recentItems = [...currentFilteredTransactions].slice(0, 6);
-
-  // Selected filter label
-  const currentPeriod = fiscalPeriods.find(p => p.key === selectedFilter);
-  const filterLabel = selectedFilter === 'ALL'
-    ? '全期間の累計'
-    : currentPeriod
-      ? currentPeriod.label
-      : `${selectedFilter.replace('-', '年')}月分`;
+  // Determine current active filter label
+  const filterLabel = (() => {
+    if (selectedFilter === 'ALL') return '全期間（累計）';
+    if (selectedFilter.startsWith('period-')) {
+      const p = fiscalPeriods.find(p => p.key === selectedFilter);
+      return p ? p.label : selectedFilter;
+    }
+    return `${selectedFilter.replace('-', '年')}月`;
+  })();
 
   return (
     <div className="space-y-6">
-      {/* Top Header / Period Selector & Core Actions */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* Top Banner / Filter & Action bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/80 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="flex -space-x-1 items-center">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 shadow-xs flex items-center justify-center text-white font-black text-sm">
-              S
-            </div>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500 shadow-xs flex items-center justify-center text-white font-black text-sm">
-              A
-            </div>
+          <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-xl">
+            <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-                ダッシュボード
-              </h1>
-              {currentPeriod && (
-                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold font-mono">
-                  第{currentPeriod.periodNumber}期
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500">
-              {filterLabel}の収支概要
+            <h1 className="text-base font-bold text-gray-900 flex items-center gap-2">
+              ダッシュボード
+              <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-full font-mono">
+                {filterLabel}
+              </span>
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {filterLabel}の収支・店舗別概要
             </p>
           </div>
         </div>
@@ -132,15 +124,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </select>
           </div>
 
-          {/* Fiscal Settings Trigger */}
+          {/* Settings Trigger */}
           <button
             type="button"
             onClick={onOpenFiscalSettings}
             className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1"
-            title="決算月・第1期開始年の設定"
+            title="決算期・店舗設定"
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">決算期設定</span>
+            <span className="hidden sm:inline">環境設定</span>
           </button>
 
           <button
@@ -163,8 +155,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* Main KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Sales Card */}
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-emerald-150 shadow-xs relative overflow-hidden">
           <div className="flex items-center justify-between text-xs font-bold text-emerald-800 mb-2">
@@ -250,61 +242,90 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Category Breakdown (2 Column Clean Layout) */}
-      <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-          <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-600" />
-            カテゴリ別内訳 ({filterLabel})
-          </h2>
-          <button
-            type="button"
-            onClick={() => onNavigateToTab('monthly')}
-            className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
-          >
-            期別・月別集計表 <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+      {/* 3-Column Breakdown (Category, Payment Method, Store) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Category Breakdown */}
+        <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <h2 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              売上科目別内訳
+            </h2>
+            <span className="text-xs font-bold font-mono text-emerald-700">
+              {formatCurrency(summary.totalSales)}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {Object.entries(summary.bySalesCategory).length === 0 ? (
+              <p className="text-xs text-gray-400 py-3 text-center">売上データなし</p>
+            ) : (
+              Object.entries(summary.bySalesCategory).map(([cat, amt]) => (
+                <div key={cat} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-50/70">
+                  <span className="font-medium text-gray-700 truncate">{cat}</span>
+                  <span className="font-mono font-bold text-emerald-950">{formatCurrency(amt)}</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {/* Sales Categories */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-emerald-900 px-1">
-              <span>売上内訳</span>
-              <span className="font-mono">{formatCurrency(summary.totalSales)}</span>
-            </div>
-            <div className="space-y-1.5 bg-emerald-50/30 p-3.5 rounded-xl border border-emerald-100">
-              {Object.entries(summary.bySalesCategory).length === 0 ? (
-                <p className="text-xs text-gray-400 py-3 text-center">売上データなし</p>
-              ) : (
-                Object.entries(summary.bySalesCategory).map(([cat, amt]) => (
-                  <div key={cat} className="flex items-center justify-between text-xs py-1">
-                    <span className="font-medium text-gray-700 truncate max-w-[160px]">{cat}</span>
-                    <span className="font-mono font-bold text-emerald-950">{formatCurrency(amt)}</span>
-                  </div>
-                ))
-              )}
-            </div>
+        {/* Payment Method Breakdown (現金, クレジット, QR, ポイント, 銀行振込) */}
+        <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <h2 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+              決済種別内訳
+            </h2>
+            <span className="text-xs font-bold text-gray-500">
+              全取引
+            </span>
           </div>
-
-          {/* Expense Categories */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-amber-900 px-1">
-              <span>経費内訳</span>
-              <span className="font-mono">{formatCurrency(summary.totalExpenses)}</span>
-            </div>
-            <div className="space-y-1.5 bg-amber-50/30 p-3.5 rounded-xl border border-amber-100">
-              {Object.entries(summary.byExpenseCategory).length === 0 ? (
-                <p className="text-xs text-gray-400 py-3 text-center">経費データなし</p>
-              ) : (
-                Object.entries(summary.byExpenseCategory).map(([cat, amt]) => (
-                  <div key={cat} className="flex items-center justify-between text-xs py-1">
-                    <span className="font-medium text-gray-700 truncate max-w-[160px]">{cat}</span>
-                    <span className="font-mono font-bold text-amber-950">{formatCurrency(amt)}</span>
+          <div className="space-y-1.5">
+            {Object.entries(summary.byPaymentMethod).length === 0 ? (
+              <p className="text-xs text-gray-400 py-3 text-center">データなし</p>
+            ) : (
+              Object.entries(summary.byPaymentMethod).map(([pm, amt]) => (
+                <div key={pm} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${
+                      pm === '現金' ? 'bg-emerald-500' :
+                      pm === 'クレジットカード' ? 'bg-blue-500' :
+                      pm === 'QR決済' ? 'bg-amber-500' :
+                      pm === 'ポイント' ? 'bg-purple-500' : 'bg-gray-400'
+                    }`} />
+                    <span className="font-medium text-gray-700 truncate">{pm}</span>
                   </div>
-                ))
-              )}
-            </div>
+                  <span className="font-mono font-bold text-gray-900">{formatCurrency(amt)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Store / Department Breakdown */}
+        <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+            <h2 className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+              <Store className="w-3.5 h-3.5 text-indigo-600" />
+              店舗・部門別内訳
+            </h2>
+            <span className="text-xs font-bold text-gray-500">
+              全取引
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {Object.entries(summary.byStore).length === 0 ? (
+              <p className="text-xs text-gray-400 py-3 text-center">データなし</p>
+            ) : (
+              Object.entries(summary.byStore).map(([st, amt]) => (
+                <div key={st} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-gray-700 truncate">{st}</span>
+                  </div>
+                  <span className="font-mono font-bold text-indigo-950">{formatCurrency(amt)}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -346,8 +367,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {recentItems.map(tx => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {currentFilteredTransactions.slice(0, 6).map(tx => (
               <ScratchBlockCard
                 key={tx.id}
                 transaction={tx}

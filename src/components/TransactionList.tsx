@@ -368,6 +368,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           <div className="text-[11px] text-gray-400 truncate max-w-xs">{tx.memo}</div>
                         )}
                         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-gray-400">
+                          {tx.store && (
+                            <>
+                              <span className="font-bold text-indigo-700 bg-indigo-50 px-1 rounded">{tx.store}</span>
+                              <span>•</span>
+                            </>
+                          )}
                           <span>{tx.payment_method}</span>
                           <span>•</span>
                           <span>{getSourceTypeLabel(tx.source_type)}</span>

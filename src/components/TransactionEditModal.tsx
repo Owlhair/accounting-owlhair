@@ -211,8 +211,21 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
             </div>
           </div>
 
-          {/* Payment Method & Source Type */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Payment Method, Store & Source Type */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">店舗・部門</label>
+              <select
+                value={formData.store || '本店'}
+                onChange={(e) => setFormData({ ...formData, store: e.target.value })}
+                className="w-full text-xs sm:text-sm p-2 border rounded-lg bg-white"
+              >
+                {settings.stores.map(st => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">決済方法</label>
               <select
