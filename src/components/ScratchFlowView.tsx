@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Transaction } from '../types';
+import { Transaction, FiscalPeriod } from '../types';
 import { ScratchBlockCard } from './ScratchBlockCard';
-import { Layers, Plus, Calendar, Filter } from 'lucide-react';
+import { Layers, Plus, Building2, SlidersHorizontal } from 'lucide-react';
 
 interface ScratchFlowViewProps {
   transactions: Transaction[];
-  selectedMonth: string;
-  onSelectMonth: (month: string) => void;
+  selectedFilter: string;
+  onSelectFilter: (filterId: string) => void;
+  fiscalPeriods: FiscalPeriod[];
   availableMonths: string[];
   onEdit: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
@@ -14,6 +15,7 @@ interface ScratchFlowViewProps {
   onToggleConfirm: (id: string) => void;
   onOpenAddSales: () => void;
   onOpenAddExpense: () => void;
+  onOpenFiscalSettings: () => void;
   onQuoteInChat?: (tx: Transaction) => void;
 }
 
@@ -21,8 +23,9 @@ type BlockFilter = 'all' | 'sales' | 'expense' | 'unconfirmed';
 
 export const ScratchFlowView: React.FC<ScratchFlowViewProps> = ({
   transactions,
-  selectedMonth,
-  onSelectMonth,
+  selectedFilter,
+  onSelectFilter,
+  fiscalPeriods,
   availableMonths,
   onEdit,
   onDuplicate,
@@ -30,15 +33,20 @@ export const ScratchFlowView: React.FC<ScratchFlowViewProps> = ({
   onToggleConfirm,
   onOpenAddSales,
   onOpenAddExpense,
+  onOpenFiscalSettings,
   onQuoteInChat,
 }) => {
   const [filter, setFilter] = useState<BlockFilter>('all');
 
   const filtered = transactions.filter(tx => {
-    if (selectedMonth !== 'ALL') {
-      const m1 = tx.date_from ? tx.date_from.substring(0, 7) : '';
-      const m2 = tx.date_to ? tx.date_to.substring(0, 7) : '';
-      if (m1 !== selectedMonth && m2 !== selectedMonth) return false;
+    if (selectedFilter !== 'ALL') {
+      const m = tx.date_from ? tx.date_from.substring(0, 7) : (tx.date_to ? tx.date_to.substring(0, 7) : '');
+      if (selectedFilter.startsWith('period-')) {
+        const p = fiscalPeriods.find(p => p.key === selectedFilter);
+        if (p && !p.months.includes(m)) return false;
+      } else if (m !== selectedFilter) {
+        return false;
+      }
     }
     if (filter === 'sales' && tx.type !== 'sales') return false;
     if (filter === 'expense' && tx.type !== 'expense') return false;
@@ -98,7 +106,7 @@ export const ScratchFlowView: React.FC<ScratchFlowViewProps> = ({
                 filter === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              すべて ({transactions.length})
+              すべて ({filtered.length})
             </button>
             <button
               type="button"
@@ -129,18 +137,42 @@ export const ScratchFlowView: React.FC<ScratchFlowViewProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-gray-700">
-            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => onSelectMonth(e.target.value)}
-              className="bg-transparent focus:outline-hidden cursor-pointer"
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-gray-700">
+              <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <select
+                value={selectedFilter}
+                onChange={(e) => onSelectFilter(e.target.value)}
+                className="bg-transparent focus:outline-hidden cursor-pointer"
+              >
+                <optgroup label="期ごとの集計（推奨）">
+                  {fiscalPeriods.map(p => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="単月">
+                  {availableMonths.map(m => (
+                    <option key={m} value={m}>
+                      {m.replace('-', '年')}月
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="全体">
+                  <option value="ALL">全期間（累計）</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenFiscalSettings}
+              className="p-1.5 text-gray-600 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 rounded-xl transition-colors"
+              title="決算期設定"
             >
-              <option value="ALL">全期間（累計）</option>
-              {availableMonths.map(m => (
-                <option key={m} value={m}>{m.replace('-', '年')}月</option>
-              ))}
-            </select>
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>

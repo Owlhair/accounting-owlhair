@@ -33,6 +33,11 @@ export const DEFAULT_PAYMENT_METHODS = [
   'その他',
 ];
 
+export const DEFAULT_FISCAL_SETTINGS = {
+  fiscalYearEndMonth: 3, // デフォルト: 3月決算 (4月1日〜翌年3月31日)
+  fiscalYearStartYear: 2024, // 第1期開始年
+};
+
 export const SAMPLE_TRANSACTIONS: Transaction[] = [
   // 2025年8月 月間売上 (技術売上: 850,000, 商品売上: 120,000, その他: 30,000 -> 合計 1,000,000円)
   {
@@ -181,17 +186,28 @@ export const loadSettings = (): AppSettings => {
         salesCategories: DEFAULT_SALES_CATEGORIES,
         expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
         paymentMethods: DEFAULT_PAYMENT_METHODS,
+        fiscalSettings: DEFAULT_FISCAL_SETTINGS,
       };
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(initialSettings));
       return initialSettings;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      salesCategories: parsed.salesCategories || DEFAULT_SALES_CATEGORIES,
+      expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
+      paymentMethods: parsed.paymentMethods || DEFAULT_PAYMENT_METHODS,
+      fiscalSettings: {
+        fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
+        fiscalYearStartYear: parsed.fiscalSettings?.fiscalYearStartYear ?? DEFAULT_FISCAL_SETTINGS.fiscalYearStartYear,
+      },
+    };
   } catch (err) {
     console.error('Failed to load settings:', err);
     return {
       salesCategories: DEFAULT_SALES_CATEGORIES,
       expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods: DEFAULT_PAYMENT_METHODS,
+      fiscalSettings: DEFAULT_FISCAL_SETTINGS,
     };
   }
 };

@@ -1,285 +1,297 @@
-import React from 'react';
-import { Transaction } from '../types';
+import React, { useState } from 'react';
+import { Transaction, FiscalPeriod } from '../types';
 import { 
+  calculatePeriodSummaries, 
   calculateMonthlySummaries, 
   calculateSummary, 
-  formatCurrency, 
-  getGranularityLabel 
+  formatCurrency 
 } from '../utils/calculations';
-import { Calendar, TrendingUp, TrendingDown, Wallet, PieChart, ArrowRight } from 'lucide-react';
+import { Building2, Calendar, TrendingUp, TrendingDown, Wallet, SlidersHorizontal, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface MonthlyAggregationViewProps {
   transactions: Transaction[];
-  selectedMonth: string;
-  onSelectMonth: (month: string) => void;
+  selectedFilter: string;
+  onSelectFilter: (filterId: string) => void;
+  fiscalPeriods: FiscalPeriod[];
+  availableMonths: string[];
+  onOpenFiscalSettings: () => void;
   onNavigateToTab: (tab: 'list' | 'scratch') => void;
 }
 
 export const MonthlyAggregationView: React.FC<MonthlyAggregationViewProps> = ({
   transactions,
-  selectedMonth,
-  onSelectMonth,
+  selectedFilter,
+  onSelectFilter,
+  fiscalPeriods,
+  availableMonths,
+  onOpenFiscalSettings,
   onNavigateToTab,
 }) => {
-  const monthlyList = calculateMonthlySummaries(transactions);
-  const currentSummary = calculateSummary(transactions, selectedMonth);
+  const periodSummaries = calculatePeriodSummaries(transactions, fiscalPeriods);
+  const currentSummary = calculateSummary(transactions, selectedFilter, fiscalPeriods);
+  const [expandedPeriod, setExpandedPeriod] = useState<string>(
+    fiscalPeriods[0]?.key || 'period-1'
+  );
+
+  const selectedPeriodObj = fiscalPeriods.find(p => p.key === selectedFilter);
+  const filterLabel = selectedFilter === 'ALL'
+    ? '全期間の累計'
+    : selectedPeriodObj
+      ? selectedPeriodObj.label
+      : `${selectedFilter.replace('-', '年')}月分`;
 
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-indigo-600" />
-            月別・カテゴリ別集計
+            <Building2 className="w-5 h-5 text-indigo-600" />
+            期別・月別集計表
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            取引データからリアルタイムに自動集計されます（元データと集計を分離し不整合を防止）。
+            設定された決算月に基づいて各期（12ヶ月）と月次推移を自動集計します
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 font-medium">表示期間:</span>
-          <select
-            value={selectedMonth}
-            onChange={(e) => onSelectMonth(e.target.value)}
-            className="text-xs font-bold px-3 py-1.5 bg-gray-50 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+          <button
+            type="button"
+            onClick={onOpenFiscalSettings}
+            className="px-3 py-1.5 bg-gray-50 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 border border-gray-200 hover:border-indigo-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
           >
-            <option value="ALL">全期間（累計）</option>
-            {monthlyList.map(m => (
-              <option key={m.month} value={m.month}>
-                {m.month.replace('-', '年')}月
-              </option>
-            ))}
-          </select>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+            決算期設定
+          </button>
+
+          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-gray-700">
+            <select
+              value={selectedFilter}
+              onChange={(e) => onSelectFilter(e.target.value)}
+              className="bg-transparent focus:outline-hidden cursor-pointer"
+            >
+              <optgroup label="期ごとの集計（推奨）">
+                {fiscalPeriods.map(p => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="単月">
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>
+                    {m.replace('-', '年')}月
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="全体">
+                <option value="ALL">全期間（累計）</option>
+              </optgroup>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Selected Month / Period Highlight Cards */}
+      {/* Highlight KPI Cards for Current Selected Period / Filter */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/5 p-4 rounded-2xl border border-emerald-200">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-emerald-150 shadow-xs">
           <div className="flex items-center justify-between text-xs font-bold text-emerald-800 mb-1">
-            <span>売上合計 ({selectedMonth === 'ALL' ? '全期間' : selectedMonth})</span>
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <span>売上合計 ({filterLabel})</span>
+            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+              <TrendingUp className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-xl font-extrabold font-mono text-emerald-950">
+          <div className="text-2xl font-black font-mono text-emerald-950">
             {formatCurrency(currentSummary.totalSales)}
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500/10 to-orange-500/5 p-4 rounded-2xl border border-amber-200">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-amber-150 shadow-xs">
           <div className="flex items-center justify-between text-xs font-bold text-amber-800 mb-1">
-            <span>経費合計 ({selectedMonth === 'ALL' ? '全期間' : selectedMonth})</span>
-            <TrendingDown className="w-4 h-4 text-amber-600" />
+            <span>経費合計 ({filterLabel})</span>
+            <div className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
+              <TrendingDown className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-xl font-extrabold font-mono text-amber-950">
+          <div className="text-2xl font-black font-mono text-amber-950">
             {formatCurrency(currentSummary.totalExpenses)}
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-500/10 to-blue-500/5 p-4 rounded-2xl border border-indigo-200">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-indigo-150 shadow-xs">
           <div className="flex items-center justify-between text-xs font-bold text-indigo-800 mb-1">
-            <span>差引利益 (売上 - 経費)</span>
-            <Wallet className="w-4 h-4 text-indigo-600" />
+            <span>差引利益 ({filterLabel})</span>
+            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+              <Wallet className="w-4 h-4" />
+            </div>
           </div>
-          <div className={`text-xl font-extrabold font-mono ${
-            currentSummary.netBalance >= 0 ? 'text-indigo-950' : 'text-rose-600'
-          }`}>
+          <div className={`text-2xl font-black font-mono ${currentSummary.netBalance >= 0 ? 'text-indigo-950' : 'text-rose-600'}`}>
             {formatCurrency(currentSummary.netBalance)}
           </div>
         </div>
       </div>
 
-      {/* Monthly Summary Table */}
-      <div className="bg-white rounded-2xl shadow-xs border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-indigo-600" />
-            月次推移一覧
+      {/* Fiscal Periods Accordion / Breakdown Table */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-600" />
+            期ごとの年度決算サマリー
           </h3>
-          <span className="text-xs text-gray-400">行をクリックして対象月を選択</span>
         </div>
 
-        {monthlyList.length === 0 ? (
-          <div className="p-8 text-center text-xs text-gray-400">データが登録されていません</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
-                <tr>
-                  <th className="p-3">年月</th>
-                  <th className="p-3 text-right text-emerald-700">売上</th>
-                  <th className="p-3 text-right text-amber-700">経費</th>
-                  <th className="p-3 text-right text-indigo-800">差引利益</th>
-                  <th className="p-3 text-center">件数 (未確認)</th>
-                  <th className="p-3 text-center">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {monthlyList.map((m) => {
-                  const isSelected = selectedMonth === m.month;
-                  return (
-                    <tr
-                      key={m.month}
-                      onClick={() => onSelectMonth(m.month)}
-                      className={`cursor-pointer transition-colors ${
-                        isSelected ? 'bg-indigo-50/70 font-semibold' : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <td className="p-3 font-mono font-bold text-gray-900">
-                        {m.month.replace('-', '年')}月
+        <div className="space-y-3">
+          {periodSummaries.map((pSum) => {
+            const isExpanded = expandedPeriod === pSum.period.key;
+            const isSelected = selectedFilter === pSum.period.key;
+
+            return (
+              <div 
+                key={pSum.period.key}
+                className={`bg-white rounded-2xl border transition-all overflow-hidden shadow-xs ${
+                  isSelected ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-200/80'
+                }`}
+              >
+                {/* Period Row Header */}
+                <div 
+                  onClick={() => setExpandedPeriod(isExpanded ? '' : pSum.period.key)}
+                  className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/70 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl shrink-0">
+                      {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-gray-900">
+                          {pSum.period.label}
+                        </span>
                         {isSelected && (
-                          <span className="ml-2 text-[10px] px-1.5 py-0.2 bg-indigo-600 text-white rounded">選択中</span>
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded-full">
+                            選択中
+                          </span>
                         )}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-right text-emerald-700">
-                        {formatCurrency(m.sales)}
-                      </td>
-                      <td className="p-3 font-mono font-bold text-right text-amber-700">
-                        {formatCurrency(m.expenses)}
-                      </td>
-                      <td className={`p-3 font-mono font-bold text-right ${
-                        m.net >= 0 ? 'text-indigo-900' : 'text-rose-600'
-                      }`}>
-                        {formatCurrency(m.net)}
-                      </td>
-                      <td className="p-3 text-center text-gray-600">
-                        {m.count}件 {m.unconfirmed > 0 && <span className="text-rose-600 font-bold">({m.unconfirmed}件未確認)</span>}
-                      </td>
-                      <td className="p-3 text-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectMonth(m.month);
-                            onNavigateToTab('list');
-                          }}
-                          className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
-                        >
-                          明細を見る <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Category Breakdowns (Sales vs Expenses) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Sales Categories */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-4 space-y-3">
-          <h3 className="text-sm font-bold text-emerald-900 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <PieChart className="w-4 h-4 text-emerald-600" />
-              売上種類別 内訳 ({selectedMonth === 'ALL' ? '全期間' : selectedMonth})
-            </span>
-            <span className="font-mono text-emerald-700">{formatCurrency(currentSummary.totalSales)}</span>
-          </h3>
-
-          <div className="space-y-2">
-            {Object.entries(currentSummary.bySalesCategory).length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">売上データはありません</p>
-            ) : (
-              Object.entries(currentSummary.bySalesCategory).map(([cat, amt]) => {
-                const pct = currentSummary.totalSales > 0 ? (amt / currentSummary.totalSales) * 100 : 0;
-                return (
-                  <div key={cat} className="space-y-1">
-                    <div className="flex justify-between text-xs font-medium text-gray-700">
-                      <span>{cat}</span>
-                      <span className="font-mono font-bold">
-                        {formatCurrency(amt)} <span className="text-gray-400 text-[10px]">({pct.toFixed(1)}%)</span>
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(100, Math.max(2, pct))}%` }}
-                      />
+                      </div>
+                      <p className="text-xs text-gray-500 font-mono">
+                        {pSum.period.startDate} 〜 {pSum.period.endDate}（{pSum.count}件の取引）
+                      </p>
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
 
-        {/* Expense Categories */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-4 space-y-3">
-          <h3 className="text-sm font-bold text-amber-900 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <PieChart className="w-4 h-4 text-amber-600" />
-              経費科目別 内訳 ({selectedMonth === 'ALL' ? '全期間' : selectedMonth})
-            </span>
-            <span className="font-mono text-amber-700">{formatCurrency(currentSummary.totalExpenses)}</span>
-          </h3>
-
-          <div className="space-y-2">
-            {Object.entries(currentSummary.byExpenseCategory).length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center">経費データはありません</p>
-            ) : (
-              Object.entries(currentSummary.byExpenseCategory).map(([cat, amt]) => {
-                const pct = currentSummary.totalExpenses > 0 ? (amt / currentSummary.totalExpenses) * 100 : 0;
-                return (
-                  <div key={cat} className="space-y-1">
-                    <div className="flex justify-between text-xs font-medium text-gray-700">
-                      <span>{cat}</span>
-                      <span className="font-mono font-bold">
-                        {formatCurrency(amt)} <span className="text-gray-400 text-[10px]">({pct.toFixed(1)}%)</span>
+                  {/* Period Mini Stats */}
+                  <div className="flex items-center gap-6 text-xs justify-between md:justify-end">
+                    <div>
+                      <span className="text-gray-400 text-[10px] block">期中売上</span>
+                      <span className="font-mono font-bold text-emerald-800 text-sm">
+                        {formatCurrency(pSum.sales)}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-amber-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(100, Math.max(2, pct))}%` }}
-                      />
+                    <div>
+                      <span className="text-gray-400 text-[10px] block">期中経費</span>
+                      <span className="font-mono font-bold text-amber-800 text-sm">
+                        {formatCurrency(pSum.expenses)}
+                      </span>
                     </div>
+                    <div>
+                      <span className="text-gray-400 text-[10px] block">期中利益</span>
+                      <span className={`font-mono font-bold text-sm ${pSum.net >= 0 ? 'text-indigo-900' : 'text-rose-600'}`}>
+                        {formatCurrency(pSum.net)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectFilter(pSum.period.key);
+                      }}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-indigo-600 hover:text-white text-gray-700 text-xs font-bold rounded-xl transition-colors shrink-0"
+                    >
+                      この期を基準にする
+                    </button>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Input Granularity & Payment Methods Breakdown */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Payment Methods */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-4 space-y-3">
-          <h3 className="text-sm font-bold text-gray-800">
-            💳 決済方法別 流通額
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(currentSummary.byPaymentMethod).map(([method, amt]) => (
-              <div key={method} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 last:border-0">
-                <span className="font-medium text-gray-700">{method}</span>
-                <span className="font-mono font-bold text-gray-900">{formatCurrency(amt)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Input Granularity */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200 p-4 space-y-3">
-          <h3 className="text-sm font-bold text-gray-800">
-            📊 入力粒度別の登録件数
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(currentSummary.byGranularity).map(([granularityKey, data]) => (
-              <div key={granularityKey} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 last:border-0">
-                <span className="font-medium text-gray-700">{getGranularityLabel(granularityKey)}</span>
-                <div className="text-right font-mono">
-                  <span className="font-bold text-gray-900">{data.count}件</span>
-                  <span className="text-[11px] text-gray-400 ml-2">
-                    (売上: {formatCurrency(data.totalSales)} / 経費: {formatCurrency(data.totalExpenses)})
-                  </span>
                 </div>
+
+                {/* Expanded Month-by-Month Table within this Period */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50/40 p-4 sm:p-5 space-y-3 animate-in fade-in duration-150">
+                    <div className="text-xs font-bold text-gray-600 flex items-center justify-between">
+                      <span>{pSum.period.label} の月別推移</span>
+                      <span className="text-[11px] text-gray-400">（12ヶ月分）</span>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-2xs">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-500 border-b border-gray-200 font-bold">
+                            <th className="py-2.5 px-3">対象月</th>
+                            <th className="py-2.5 px-3 text-right">売上</th>
+                            <th className="py-2.5 px-3 text-right">経費</th>
+                            <th className="py-2.5 px-3 text-right">差引利益</th>
+                            <th className="py-2.5 px-3 text-center">件数</th>
+                            <th className="py-2.5 px-3 text-center">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {pSum.monthlySummaries.map((m) => (
+                            <tr key={m.month} className="hover:bg-gray-50/80">
+                              <td className="py-2.5 px-3 font-mono font-bold text-gray-800">
+                                {m.month.replace('-', '年')}月
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800">
+                                {formatCurrency(m.sales)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-800">
+                                {formatCurrency(m.expenses)}
+                              </td>
+                              <td className={`py-2.5 px-3 text-right font-mono font-bold ${m.net >= 0 ? 'text-indigo-900' : 'text-rose-600'}`}>
+                                {formatCurrency(m.net)}
+                              </td>
+                              <td className="py-2.5 px-3 text-center text-gray-500 font-mono">
+                                {m.count}件
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onSelectFilter(m.month);
+                                    onNavigateToTab('list');
+                                  }}
+                                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800"
+                                >
+                                  明細を見る
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-indigo-50/50 border-t-2 border-indigo-200 font-bold">
+                            <td className="py-2.5 px-3 text-indigo-950 font-black">
+                              年度合計
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-900">
+                              {formatCurrency(pSum.sales)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-black text-amber-900">
+                              {formatCurrency(pSum.expenses)}
+                            </td>
+                            <td className={`py-2.5 px-3 text-right font-mono font-black ${pSum.net >= 0 ? 'text-indigo-950' : 'text-rose-700'}`}>
+                              {formatCurrency(pSum.net)}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono font-black text-indigo-950">
+                              {pSum.count}件
+                            </td>
+                            <td className="py-2.5 px-3 text-center"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
     </div>

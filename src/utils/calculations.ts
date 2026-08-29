@@ -1,4 +1,4 @@
-import { Transaction, AggregationSummary, MonthlySummary } from '../types';
+import { Transaction, AggregationSummary, MonthlySummary, FiscalSettings, FiscalPeriod, PeriodSummary } from '../types';
 
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('ja-JP', {
@@ -26,7 +26,135 @@ export const getTransactionMonth = (tx: Transaction): string => {
 };
 
 /**
- * Checks if a transaction falls within the selected month (YYYY-MM) or period
+ * Gets effective date string for sorting or period checking
+ */
+export const getTransactionDate = (tx: Transaction): string => {
+  return tx.date_from || tx.date_to || '';
+};
+
+/**
+ * Generates available fiscal periods automatically based on:
+ * - fiscalYearEndMonth (決算月 1-12)
+ * - fiscalYearStartYear (第1期開始年)
+ * - Earliest and latest transaction dates in the dataset
+ */
+export const calculateFiscalPeriods = (
+  transactions: Transaction[],
+  settings: FiscalSettings
+): FiscalPeriod[] => {
+  const { fiscalYearEndMonth, fiscalYearStartYear } = settings;
+  const startMonthNum = (fiscalYearEndMonth % 12) + 1; // e.g., if endMonth=3 -> startMonth=4
+
+  // Find range of years from transactions & settings
+  let minYear = fiscalYearStartYear;
+  let maxYear = new Date().getFullYear() + 1;
+
+  transactions.forEach(tx => {
+    const d = getTransactionDate(tx);
+    if (d && d.length >= 4) {
+      const y = parseInt(d.substring(0, 4), 10);
+      if (!isNaN(y)) {
+        if (y < minYear) minYear = y;
+        if (y > maxYear) maxYear = y;
+      }
+    }
+  });
+
+  // Calculate periods from first year to maxYear + 1
+  const periods: FiscalPeriod[] = [];
+  
+  // A fiscal period for periodNumber N:
+  // Starts in year: fiscalYearStartYear + (N - 1)
+  // Starts at month: startMonthNum
+  // Ends at month: fiscalYearEndMonth
+  // Ends in year: if startMonthNum > fiscalYearEndMonth, it spans into next calendar year (startYear + 1)
+  
+  const totalPeriodsToGenerate = Math.max(1, (maxYear - fiscalYearStartYear) + 3);
+
+  for (let pNum = 1; pNum <= totalPeriodsToGenerate; pNum++) {
+    const startCalYear = fiscalYearStartYear + (pNum - 1);
+    const endCalYear = startMonthNum <= fiscalYearEndMonth ? startCalYear : startCalYear + 1;
+
+    const startMonthStr = `${startCalYear}-${String(startMonthNum).padStart(2, '0')}`;
+    const endMonthStr = `${endCalYear}-${String(fiscalYearEndMonth).padStart(2, '0')}`;
+    
+    // Calculate last day of endMonth
+    const lastDay = new Date(endCalYear, fiscalYearEndMonth, 0).getDate();
+    const startDate = `${startMonthStr}-01`;
+    const endDate = `${endMonthStr}-${String(lastDay).padStart(2, '0')}`;
+
+    // Collect all months belonging to this period
+    const months: string[] = [];
+    let curY = startCalYear;
+    let curM = startMonthNum;
+    for (let i = 0; i < 12; i++) {
+      months.push(`${curY}-${String(curM).padStart(2, '0')}`);
+      curM++;
+      if (curM > 12) {
+        curM = 1;
+        curY++;
+      }
+    }
+
+    periods.push({
+      periodNumber: pNum,
+      label: `第${pNum}期 (${startMonthStr.replace('-', '/')}〜${endMonthStr.replace('-', '/')})`,
+      key: `period-${pNum}`,
+      startDate,
+      endDate,
+      startMonth: startMonthStr,
+      endMonth: endMonthStr,
+      months,
+    });
+  }
+
+  // Return sorted descending by period number (newest first)
+  return periods.sort((a, b) => b.periodNumber - a.periodNumber);
+};
+
+/**
+ * Checks which fiscal period a given date/month belongs to
+ */
+export const getFiscalPeriodForDate = (
+  dateStr: string,
+  periods: FiscalPeriod[]
+): FiscalPeriod | undefined => {
+  if (!dateStr) return undefined;
+  const month = dateStr.length >= 7 ? dateStr.substring(0, 7) : '';
+  return periods.find(p => p.months.includes(month));
+};
+
+/**
+ * Checks if a transaction falls within a selected period or month filter
+ * filterId can be:
+ * - 'ALL'
+ * - 'period-X' (e.g. 'period-1')
+ * - 'YYYY-MM' (e.g. '2025-08')
+ */
+export const isTransactionInFilter = (
+  tx: Transaction,
+  filterId: string,
+  periods: FiscalPeriod[]
+): boolean => {
+  if (!filterId || filterId === 'ALL') return true;
+
+  const month = getTransactionMonth(tx);
+  if (month === '未設定') return false;
+
+  if (filterId.startsWith('period-')) {
+    const period = periods.find(p => p.key === filterId);
+    if (!period) return true;
+    return period.months.includes(month);
+  }
+
+  // Month filter (YYYY-MM)
+  const monthFrom = tx.date_from ? tx.date_from.substring(0, 7) : '';
+  const monthTo = tx.date_to ? tx.date_to.substring(0, 7) : '';
+  return monthFrom === filterId || monthTo === filterId;
+};
+
+/**
+ * Legacy support for isTransactionInMonth
  */
 export const isTransactionInMonth = (tx: Transaction, selectedMonth: string): boolean => {
   if (!selectedMonth || selectedMonth === 'ALL') return true;
@@ -36,25 +164,17 @@ export const isTransactionInMonth = (tx: Transaction, selectedMonth: string): bo
 };
 
 /**
- * Checks if a transaction falls within the selected year (YYYY)
- */
-export const isTransactionInYear = (tx: Transaction, selectedYear: string): boolean => {
-  if (!selectedYear || selectedYear === 'ALL') return true;
-  const yearFrom = tx.date_from ? tx.date_from.substring(0, 4) : '';
-  const yearTo = tx.date_to ? tx.date_to.substring(0, 4) : '';
-  return yearFrom === selectedYear || yearTo === selectedYear;
-};
-
-/**
  * Calculates complete aggregation metrics dynamically from raw transactions.
- * Separates raw data from calculated summaries to prevent discrepancies.
  */
 export const calculateSummary = (
   transactions: Transaction[],
-  filterMonth?: string
+  filterId?: string,
+  periods?: FiscalPeriod[]
 ): AggregationSummary => {
-  const filtered = filterMonth && filterMonth !== 'ALL'
-    ? transactions.filter(t => isTransactionInMonth(t, filterMonth))
+  const filtered = filterId && filterId !== 'ALL'
+    ? (periods 
+        ? transactions.filter(t => isTransactionInFilter(t, filterId, periods))
+        : transactions.filter(t => isTransactionInMonth(t, filterId)))
     : transactions;
 
   let totalSales = 0;
@@ -112,6 +232,52 @@ export const calculateSummary = (
 };
 
 /**
+ * Computes period-by-period summaries (期ごとの集計)
+ */
+export const calculatePeriodSummaries = (
+  transactions: Transaction[],
+  periods: FiscalPeriod[]
+): PeriodSummary[] => {
+  const monthlySummaries = calculateMonthlySummaries(transactions);
+  const monthlyMap = new Map<string, MonthlySummary>();
+  monthlySummaries.forEach(m => monthlyMap.set(m.month, m));
+
+  return periods.map(period => {
+    let sales = 0;
+    let expenses = 0;
+    let unconfirmed = 0;
+    let count = 0;
+    const periodMonths: MonthlySummary[] = [];
+
+    period.months.forEach(month => {
+      const mSummary = monthlyMap.get(month) || {
+        month,
+        sales: 0,
+        expenses: 0,
+        net: 0,
+        unconfirmed: 0,
+        count: 0,
+      };
+      periodMonths.push(mSummary);
+      sales += mSummary.sales;
+      expenses += mSummary.expenses;
+      unconfirmed += mSummary.unconfirmed;
+      count += mSummary.count;
+    });
+
+    return {
+      period,
+      sales,
+      expenses,
+      net: sales - expenses,
+      unconfirmed,
+      count,
+      monthlySummaries: periodMonths,
+    };
+  });
+};
+
+/**
  * Computes month-by-month historical summaries
  */
 export const calculateMonthlySummaries = (transactions: Transaction[]): MonthlySummary[] => {
@@ -158,54 +324,50 @@ export const calculateMonthlySummaries = (transactions: Transaction[]): MonthlyS
  * Gets all unique available months from the transaction dataset
  */
 export const getAvailableMonths = (transactions: Transaction[]): string[] => {
-  const months = new Set<string>();
-  transactions.forEach(t => {
-    const m = getTransactionMonth(t);
-    if (m && m !== '未設定') months.add(m);
+  const monthsSet = new Set<string>();
+  transactions.forEach(tx => {
+    if (tx.date_from && tx.date_from.length >= 7) {
+      monthsSet.add(tx.date_from.substring(0, 7));
+    }
+    if (tx.date_to && tx.date_to.length >= 7) {
+      monthsSet.add(tx.date_to.substring(0, 7));
+    }
   });
-  return Array.from(months).sort((a, b) => b.localeCompare(a));
+  return Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
 };
 
-/**
- * Human readable label for granularity
- */
-export const getGranularityLabel = (granularity: string): string => {
-  switch (granularity) {
+export const getGranularityLabel = (g: string): string => {
+  switch (g) {
     case 'monthly':
-      return '月次集計';
+      return '月まとめ';
     case 'daily':
-      return '日別集計';
+      return '日まとめ';
     case 'period':
-      return '期間集計';
+      return '期間まとめ';
     case 'transaction':
-      return '個別明細';
+      return '1取引';
     default:
-      return granularity;
+      return g;
   }
 };
 
-/**
- * Human readable label for source type
- */
-export const getSourceTypeLabel = (source: string): string => {
-  switch (source) {
-    case 'manual':
-      return '手入力';
+export const getSourceTypeLabel = (s: string): string => {
+  switch (s) {
     case 'receipt':
-      return '領収書/レシート';
+      return 'レシート';
     case 'bank':
-      return '通帳/銀行';
+      return '銀行通帳';
     case 'card':
       return 'カード明細';
-    case 'ocr':
-      return 'OCR読取';
-    case 'ai':
-      return 'AI推論';
-    case 'csv':
-      return 'CSV取込';
     case 'import':
-      return 'インポート';
+    case 'csv':
+      return 'CSV';
+    case 'ocr':
+      return '画像OCR';
+    case 'ai':
+      return 'AI抽出';
+    case 'manual':
     default:
-      return source;
+      return '手入力';
   }
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Transaction } from '../types';
+import { Transaction, FiscalPeriod } from '../types';
 import { calculateSummary, formatCurrency } from '../utils/calculations';
 import { ScratchBlockCard } from './ScratchBlockCard';
 import { 
@@ -11,18 +11,20 @@ import {
   ArrowRight, 
   Layers, 
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  SlidersHorizontal,
+  Building2
 } from 'lucide-react';
 
 interface DashboardProps {
   transactions: Transaction[];
-  selectedMonth: string;
-  onSelectMonth: (month: string) => void;
+  selectedFilter: string; // 'ALL', 'period-1', or 'YYYY-MM'
+  onSelectFilter: (filterId: string) => void;
+  fiscalPeriods: FiscalPeriod[];
   availableMonths: string[];
   onOpenAddSales: () => void;
   onOpenAddExpense: () => void;
-  onOpenBackup: () => void;
-  onOpenChat: () => void;
+  onOpenFiscalSettings: () => void;
   onNavigateToTab: (tab: 'list' | 'scratch' | 'monthly') => void;
   onEdit: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
@@ -33,11 +35,13 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({
   transactions,
-  selectedMonth,
-  onSelectMonth,
+  selectedFilter,
+  onSelectFilter,
+  fiscalPeriods,
   availableMonths,
   onOpenAddSales,
   onOpenAddExpense,
+  onOpenFiscalSettings,
   onNavigateToTab,
   onEdit,
   onDuplicate,
@@ -45,23 +49,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onToggleConfirm,
   onQuoteInChat,
 }) => {
-  const summary = calculateSummary(transactions, selectedMonth);
+  const summary = calculateSummary(transactions, selectedFilter, fiscalPeriods);
 
-  // Month-filtered transactions for recent preview
-  const currentMonthTransactions = selectedMonth === 'ALL'
-    ? transactions
-    : transactions.filter(t => {
-        const m1 = t.date_from ? t.date_from.substring(0, 7) : '';
-        const m2 = t.date_to ? t.date_to.substring(0, 7) : '';
-        return m1 === selectedMonth || m2 === selectedMonth;
-      });
+  // Filtered transactions for recent preview
+  const currentFilteredTransactions = transactions.filter(t => {
+    if (selectedFilter === 'ALL') return true;
+    const m = t.date_from ? t.date_from.substring(0, 7) : (t.date_to ? t.date_to.substring(0, 7) : '');
+    if (selectedFilter.startsWith('period-')) {
+      const p = fiscalPeriods.find(p => p.key === selectedFilter);
+      return p ? p.months.includes(m) : true;
+    }
+    return m === selectedFilter;
+  });
 
-  const recentItems = [...currentMonthTransactions].slice(0, 6);
+  const recentItems = [...currentFilteredTransactions].slice(0, 6);
+
+  // Selected filter label
+  const currentPeriod = fiscalPeriods.find(p => p.key === selectedFilter);
+  const filterLabel = selectedFilter === 'ALL'
+    ? '全期間の累計'
+    : currentPeriod
+      ? currentPeriod.label
+      : `${selectedFilter.replace('-', '年')}月分`;
 
   return (
     <div className="space-y-6">
       {/* Top Header / Period Selector & Core Actions */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex -space-x-1 items-center">
             <div className="w-8 h-8 rounded-xl bg-indigo-600 shadow-xs flex items-center justify-center text-white font-black text-sm">
@@ -72,30 +86,62 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-              ダッシュボード
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                ダッシュボード
+              </h1>
+              {currentPeriod && (
+                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold font-mono">
+                  第{currentPeriod.periodNumber}期
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">
-              {selectedMonth === 'ALL' ? '全期間の累計' : `${selectedMonth.replace('-', '年')}月分`}の収支概要
+              {filterLabel}の収支概要
             </p>
           </div>
         </div>
 
-        {/* Period Selector & Quick Add */}
+        {/* Period Selector, Fiscal Year Settings, and Quick Add */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Period Selector Dropdown */}
           <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700">
-            <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+            <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
             <select
-              value={selectedMonth}
-              onChange={(e) => onSelectMonth(e.target.value)}
+              value={selectedFilter}
+              onChange={(e) => onSelectFilter(e.target.value)}
               className="bg-transparent focus:outline-hidden cursor-pointer"
             >
-              <option value="ALL">全期間（累計）</option>
-              {availableMonths.map(m => (
-                <option key={m} value={m}>{m.replace('-', '年')}月</option>
-              ))}
+              <optgroup label="期ごとの集計（推奨）">
+                {fiscalPeriods.map(p => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="単月">
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>
+                    {m.replace('-', '年')}月
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="全体">
+                <option value="ALL">全期間（累計）</option>
+              </optgroup>
             </select>
           </div>
+
+          {/* Fiscal Settings Trigger */}
+          <button
+            type="button"
+            onClick={onOpenFiscalSettings}
+            className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1"
+            title="決算月・第1期開始年の設定"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">決算期設定</span>
+          </button>
 
           <button
             type="button"
@@ -103,7 +149,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            売上を追加
+            売上追加
           </button>
 
           <button
@@ -112,7 +158,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            経費を追加
+            経費追加
           </button>
         </div>
       </div>
@@ -131,7 +177,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {formatCurrency(summary.totalSales)}
           </div>
           <div className="mt-2 text-[11px] text-gray-500 font-medium">
-            登録件数: {currentMonthTransactions.filter(t => t.type === 'sales').length}件
+            登録件数: {currentFilteredTransactions.filter(t => t.type === 'sales').length}件
           </div>
         </div>
 
@@ -147,7 +193,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {formatCurrency(summary.totalExpenses)}
           </div>
           <div className="mt-2 text-[11px] text-gray-500 font-medium">
-            登録件数: {currentMonthTransactions.filter(t => t.type === 'expense').length}件
+            登録件数: {currentFilteredTransactions.filter(t => t.type === 'expense').length}件
           </div>
         </div>
 
@@ -209,14 +255,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex items-center justify-between pb-3 border-b border-gray-100">
           <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-indigo-600" />
-            カテゴリ別内訳 ({selectedMonth === 'ALL' ? '全期間' : selectedMonth})
+            カテゴリ別内訳 ({filterLabel})
           </h2>
           <button
             type="button"
             onClick={() => onNavigateToTab('monthly')}
             className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
           >
-            月別集計表 <ArrowRight className="w-3.5 h-3.5" />
+            期別・月別集計表 <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -279,9 +325,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
         </div>
 
-        {currentMonthTransactions.length === 0 ? (
+        {currentFilteredTransactions.length === 0 ? (
           <div className="p-10 text-center space-y-3 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-            <p className="text-xs text-gray-500 font-medium">取引データがありません</p>
+            <p className="text-xs text-gray-500 font-medium">この期間の取引データがありません</p>
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"

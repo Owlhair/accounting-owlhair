@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, AppSettings, ChatMessage, TeamMember, TransactionRef } from './types';
+import { Transaction, AppSettings, ChatMessage, TeamMember, TransactionRef, FiscalSettings } from './types';
 import { 
   loadTransactions, 
   saveTransactions, 
@@ -18,7 +18,11 @@ import {
   resetToSampleChat,
   clearChatMessages
 } from './utils/chatStorage';
-import { getAvailableMonths, calculateSummary } from './utils/calculations';
+import { 
+  getAvailableMonths, 
+  calculateSummary, 
+  calculateFiscalPeriods 
+} from './utils/calculations';
 import { exportTransactionsToCsv } from './utils/csvExport';
 
 import { Navbar, NavTab } from './components/Navbar';
@@ -30,22 +34,27 @@ import { AddSalesModal } from './components/AddSalesModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
 import { TransactionEditModal } from './components/TransactionEditModal';
 import { DataBackupModal } from './components/DataBackupModal';
+import { FiscalYearSettingsModal } from './components/FiscalYearSettingsModal';
 import { TeamChatDrawer } from './components/TeamChatDrawer';
 import { PwaInstallPromptModal } from './components/PwaInstallPromptModal';
 import { MessageSquareText } from 'lucide-react';
 
 export default function App() {
-  const currentYearMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
   const [transactions, setTransactions] = useState<Transaction[]>(() => loadTransactions());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+
+  // Compute fiscal periods automatically based on settings and transactions
+  const fiscalPeriods = useMemo(() => {
+    return calculateFiscalPeriods(transactions, settings.fiscalSettings);
+  }, [transactions, settings.fiscalSettings]);
+
+  // Selected filter (Defaults to the latest/current fiscal period key, e.g. "period-1")
+  const [selectedFilter, setSelectedFilter] = useState<string>(() => {
     const loaded = loadTransactions();
-    if (loaded.length > 0) {
-      const months = getAvailableMonths(loaded);
-      return months[0] || 'ALL';
-    }
-    return new Date().toISOString().slice(0, 7);
+    const loadedSettings = loadSettings();
+    const periods = calculateFiscalPeriods(loaded, loadedSettings.fiscalSettings);
+    return periods[0]?.key || 'ALL';
   });
 
   // Multi-user team chat states
@@ -58,6 +67,7 @@ export default function App() {
   const [isAddSalesOpen, setIsAddSalesOpen] = useState(false);
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [isFiscalSettingsOpen, setIsFiscalSettingsOpen] = useState(false);
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
@@ -83,12 +93,9 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  // Derived available months
+  // Derived available months for optional single-month drilldown
   const availableMonths = useMemo(() => {
     const months = getAvailableMonths(transactions);
-    if (!months.includes('2025-08')) {
-      months.push('2025-08');
-    }
     return months.sort((a, b) => b.localeCompare(a));
   }, [transactions]);
 
@@ -173,7 +180,6 @@ export default function App() {
           const nextConfirmed = !t.confirmed;
           const updated = { ...t, confirmed: nextConfirmed, updated_at: new Date().toISOString() };
           
-          // Also update chat messages referencing this tx
           setChatMessages(chatPrev =>
             chatPrev.map(msg =>
               msg.transactionRef && msg.transactionRef.id === id
@@ -222,12 +228,26 @@ export default function App() {
     }
   };
 
+  // Handler: Save Fiscal Settings
+  const handleSaveFiscalSettings = (newFiscalSettings: FiscalSettings) => {
+    setSettings(prev => ({
+      ...prev,
+      fiscalSettings: newFiscalSettings,
+    }));
+    // Re-select first fiscal period
+    const newPeriods = calculateFiscalPeriods(transactions, newFiscalSettings);
+    if (newPeriods.length > 0) {
+      setSelectedFilter(newPeriods[0].key);
+    }
+  };
+
   // Handler: Reset to Sample Demo Data
   const handleResetSampleData = () => {
     const data = resetToSampleData();
     setTransactions(data);
     setChatMessages(resetToSampleChat());
-    setSelectedMonth('2025-08');
+    const periods = calculateFiscalPeriods(data, settings.fiscalSettings);
+    setSelectedFilter(periods[0]?.key || 'ALL');
   };
 
   // Handler: Clear All
@@ -262,13 +282,13 @@ export default function App() {
         {currentTab === 'dashboard' && (
           <Dashboard
             transactions={transactions}
-            selectedMonth={selectedMonth}
-            onSelectMonth={setSelectedMonth}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            fiscalPeriods={fiscalPeriods}
             availableMonths={availableMonths}
             onOpenAddSales={() => setIsAddSalesOpen(true)}
             onOpenAddExpense={() => setIsAddExpenseOpen(true)}
-            onOpenBackup={() => setIsBackupOpen(true)}
-            onOpenChat={() => setIsChatOpen(true)}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
             onNavigateToTab={setCurrentTab}
             onEdit={setEditingTransaction}
             onDuplicate={handleDuplicateTransaction}
@@ -281,8 +301,9 @@ export default function App() {
         {currentTab === 'list' && (
           <TransactionList
             transactions={transactions}
-            selectedMonth={selectedMonth}
-            onSelectMonth={setSelectedMonth}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            fiscalPeriods={fiscalPeriods}
             availableMonths={availableMonths}
             onEdit={setEditingTransaction}
             onDuplicate={handleDuplicateTransaction}
@@ -291,6 +312,7 @@ export default function App() {
             onBulkConfirm={handleBulkConfirm}
             onOpenAddSales={() => setIsAddSalesOpen(true)}
             onOpenAddExpense={() => setIsAddExpenseOpen(true)}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
             onExportCsv={() => exportTransactionsToCsv(transactions)}
             onQuoteInChat={handleQuoteInChat}
           />
@@ -299,8 +321,9 @@ export default function App() {
         {currentTab === 'scratch' && (
           <ScratchFlowView
             transactions={transactions}
-            selectedMonth={selectedMonth}
-            onSelectMonth={setSelectedMonth}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            fiscalPeriods={fiscalPeriods}
             availableMonths={availableMonths}
             onEdit={setEditingTransaction}
             onDuplicate={handleDuplicateTransaction}
@@ -308,6 +331,7 @@ export default function App() {
             onToggleConfirm={handleToggleConfirm}
             onOpenAddSales={() => setIsAddSalesOpen(true)}
             onOpenAddExpense={() => setIsAddExpenseOpen(true)}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
             onQuoteInChat={handleQuoteInChat}
           />
         )}
@@ -315,8 +339,11 @@ export default function App() {
         {currentTab === 'monthly' && (
           <MonthlyAggregationView
             transactions={transactions}
-            selectedMonth={selectedMonth}
-            onSelectMonth={setSelectedMonth}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            fiscalPeriods={fiscalPeriods}
+            availableMonths={availableMonths}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
             onNavigateToTab={setCurrentTab}
           />
         )}
@@ -350,10 +377,18 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button
               type="button"
+              onClick={() => setIsFiscalSettingsOpen(true)}
+              className="text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              決算期・決算月設定
+            </button>
+            <span>•</span>
+            <button
+              type="button"
               onClick={() => setIsBackupOpen(true)}
               className="text-indigo-600 hover:text-indigo-800 font-medium"
             >
-              CSV / JSONエクスポート
+              バックアップ / JSON
             </button>
             <span>•</span>
             <button
@@ -374,7 +409,7 @@ export default function App() {
         onAddTransactions={handleAddTransactions}
         settings={settings}
         onAddCategory={handleAddCategory}
-        defaultMonth={selectedMonth === 'ALL' ? '2025-08' : selectedMonth}
+        defaultMonth={new Date().toISOString().slice(0, 7)}
       />
 
       <AddExpenseModal
@@ -383,17 +418,23 @@ export default function App() {
         onAddTransactions={handleAddTransactions}
         settings={settings}
         onAddCategory={handleAddCategory}
-        defaultMonth={selectedMonth === 'ALL' ? '2025-08' : selectedMonth}
+        defaultMonth={new Date().toISOString().slice(0, 7)}
       />
 
       <TransactionEditModal
         isOpen={!!editingTransaction}
         onClose={() => setEditingTransaction(null)}
         transaction={editingTransaction}
-        onUpdate={handleUpdateTransaction}
-        onDelete={handleDeleteTransaction}
+        onSave={handleUpdateTransaction}
         settings={settings}
-        onQuoteInChat={handleQuoteInChat}
+        onAddCategory={handleAddCategory}
+      />
+
+      <FiscalYearSettingsModal
+        isOpen={isFiscalSettingsOpen}
+        onClose={() => setIsFiscalSettingsOpen(false)}
+        fiscalSettings={settings.fiscalSettings}
+        onSave={handleSaveFiscalSettings}
       />
 
       <DataBackupModal
@@ -405,33 +446,21 @@ export default function App() {
         onClearAll={handleClearAll}
       />
 
-      {/* PWA Install Prompt Modal */}
       <PwaInstallPromptModal
         isOpen={isPwaModalOpen}
         onClose={() => setIsPwaModalOpen(false)}
       />
 
-      {/* Real-time Team Chat Drawer */}
       <TeamChatDrawer
         isOpen={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          setQuotedTransaction(null);
-        }}
+        onClose={() => setIsChatOpen(false)}
         messages={chatMessages}
-        onSendMessage={handleSendMessage}
         currentMember={currentMember}
-        onSelectMember={setCurrentMember}
-        transactions={transactions}
-        onOpenTransactionModal={(tx) => {
-          setEditingTransaction(tx);
-        }}
-        onToggleConfirmTransaction={handleToggleConfirm}
+        onSendMessage={handleSendMessage}
+        onChangeMember={setCurrentMember}
         quotedTransaction={quotedTransaction}
-        onClearQuotedTransaction={() => setQuotedTransaction(null)}
-        onQuoteTransaction={(tx) => setQuotedTransaction(tx)}
+        onClearQuote={() => setQuotedTransaction(null)}
       />
     </div>
   );
 }
-

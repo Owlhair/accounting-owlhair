@@ -32,10 +32,27 @@ export interface Transaction {
   attachments?: Attachment[];
 }
 
+export interface FiscalSettings {
+  fiscalYearEndMonth: number; // 決算月 (1〜12, デフォルト例: 3月決算なら 3)
+  fiscalYearStartYear: number; // 設立年 / 第1期開始年 (例: 2020年なら2020)
+}
+
 export interface AppSettings {
   salesCategories: string[];
   expenseCategories: string[];
   paymentMethods: string[];
+  fiscalSettings: FiscalSettings;
+}
+
+export interface FiscalPeriod {
+  periodNumber: number; // 期数 (例: 1, 2, 3...)
+  label: string; // 表示用ラベル (例: "第1期 (2024/04〜2025/03)")
+  key: string; // 識別キー (例: "period-1")
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  startMonth: string; // YYYY-MM
+  endMonth: string; // YYYY-MM
+  months: string[]; // この期に含まれる YYYY-MM の配列
 }
 
 export interface AggregationSummary {
@@ -57,6 +74,16 @@ export interface MonthlySummary {
   net: number;
   unconfirmed: number;
   count: number;
+}
+
+export interface PeriodSummary {
+  period: FiscalPeriod;
+  sales: number;
+  expenses: number;
+  net: number;
+  unconfirmed: number;
+  count: number;
+  monthlySummaries: MonthlySummary[];
 }
 
 export interface TeamMember {
