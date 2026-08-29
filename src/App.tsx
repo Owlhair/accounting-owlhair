@@ -346,7 +346,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white/70 py-4 text-center text-xs text-gray-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Scratch風経理 Ver.0.1 — 粒度自由な入力とブロック型お金の流れ可視化・チーム協調作業</span>
+          <span className="font-medium text-gray-600">scracc — scratch accounting</span>
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -359,9 +359,9 @@ export default function App() {
             <button
               type="button"
               onClick={handleResetSampleData}
-              className="text-gray-600 hover:text-gray-900"
+              className="text-gray-500 hover:text-gray-800"
             >
-              デモデータ再読み込み
+              デモデータ読み込み
             </button>
           </div>
         </div>

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
 import { ScratchBlockCard } from './ScratchBlockCard';
-import { formatCurrency } from '../utils/calculations';
-import { Layers, Plus, Calendar, Filter, Sparkles } from 'lucide-react';
+import { Layers, Plus, Calendar, Filter } from 'lucide-react';
 
 interface ScratchFlowViewProps {
   transactions: Transaction[];
@@ -51,102 +50,93 @@ export const ScratchFlowView: React.FC<ScratchFlowViewProps> = ({
   const expenseBlocks = filtered.filter(t => t.type === 'expense');
 
   return (
-    <div className="space-y-5">
-      {/* Visual Header & Controls */}
-      <div className="bg-gradient-to-br from-indigo-900 via-indigo-850 to-slate-900 rounded-2xl p-4 sm:p-6 text-white shadow-md relative overflow-hidden">
-        {/* Background Scratch Block pattern motif */}
-        <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="p-1.5 bg-indigo-500/30 rounded-lg text-indigo-300 backdrop-blur-xs">
-                <Layers className="w-5 h-5" />
-              </span>
-              <h2 className="text-lg sm:text-xl font-extrabold tracking-tight">
-                Scratch風ブロックフロー
-              </h2>
+    <div className="space-y-4">
+      {/* Top Header & Filter Controls */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-200/80 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <Layers className="w-5 h-5" />
             </div>
-            <p className="text-xs sm:text-sm text-indigo-200/90 max-w-xl">
-              取引データをブロックとして積み重ね、お金の発生源からカテゴリ・決済方法への流れを視覚的に把握できます。
-            </p>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-gray-900">
+                ブロックフロー
+              </h2>
+              <p className="text-xs text-gray-500">
+                取引をお金の流れのブロックとして視覚的に確認
+              </p>
+            </div>
           </div>
 
-          {/* Quick Actions */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onOpenAddSales}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1"
             >
-              <Plus className="w-4 h-4" />
-              売上ブロック追加
+              <Plus className="w-3.5 h-3.5" />
+              売上追加
             </button>
             <button
               type="button"
               onClick={onOpenAddExpense}
-              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5"
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1"
             >
-              <Plus className="w-4 h-4" />
-              経費ブロック追加
+              <Plus className="w-3.5 h-3.5" />
+              経費追加
             </button>
           </div>
         </div>
 
         {/* Filter bar */}
-        <div className="mt-5 pt-4 border-t border-indigo-700/50 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-indigo-300 font-medium flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5" /> 絞り込み:
-            </span>
-            <div className="flex gap-1 bg-black/25 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setFilter('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  filter === 'all' ? 'bg-indigo-600 text-white' : 'text-indigo-200 hover:text-white'
-                }`}
-              >
-                すべて ({filtered.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('sales')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  filter === 'sales' ? 'bg-emerald-600 text-white' : 'text-emerald-300 hover:text-white'
-                }`}
-              >
-                売上 ({salesBlocks.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('expense')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  filter === 'expense' ? 'bg-amber-600 text-white' : 'text-amber-300 hover:text-white'
-                }`}
-              >
-                経費 ({expenseBlocks.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('unconfirmed')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  filter === 'unconfirmed' ? 'bg-rose-600 text-white' : 'text-rose-300 hover:text-white'
-                }`}
-              >
-                未確認のみ
-              </button>
-            </div>
+        <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-1.5 bg-gray-100/80 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filter === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              すべて ({transactions.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('sales')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filter === 'sales' ? 'bg-emerald-600 text-white shadow-xs' : 'text-emerald-800 hover:bg-emerald-50'
+              }`}
+            >
+              売上のみ ({salesBlocks.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('expense')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filter === 'expense' ? 'bg-amber-600 text-white shadow-xs' : 'text-amber-800 hover:bg-amber-50'
+              }`}
+            >
+              経費のみ ({expenseBlocks.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('unconfirmed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filter === 'unconfirmed' ? 'bg-rose-600 text-white shadow-xs' : 'text-rose-700 hover:bg-rose-50'
+              }`}
+            >
+              未確認
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-indigo-300" />
+          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-gray-700">
+            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
             <select
               value={selectedMonth}
               onChange={(e) => onSelectMonth(e.target.value)}
-              className="bg-indigo-950/80 text-white text-xs px-3 py-1.5 rounded-xl border border-indigo-700/60 focus:ring-2 focus:ring-indigo-400 focus:outline-hidden font-medium"
+              className="bg-transparent focus:outline-hidden cursor-pointer"
             >
-              <option value="ALL">全ての期間</option>
+              <option value="ALL">全期間（累計）</option>
               {availableMonths.map(m => (
                 <option key={m} value={m}>{m.replace('-', '年')}月</option>
               ))}
@@ -157,15 +147,15 @@ export const ScratchFlowView: React.FC<ScratchFlowViewProps> = ({
 
       {/* Grid of Blocks */}
       {filtered.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-300 text-center text-gray-400">
-          <Sparkles className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+        <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-200 text-center text-gray-400 space-y-2">
+          <Layers className="w-8 h-8 mx-auto text-gray-300" />
           <p className="text-sm font-bold text-gray-600">表示できるブロックがありません</p>
-          <p className="text-xs text-gray-400 mt-1">
-            「売上ブロック追加」または「経費ブロック追加」から登録してください。
+          <p className="text-xs text-gray-400">
+            「売上追加」または「経費追加」から登録してください。
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {filtered.map(tx => (
             <ScratchBlockCard
               key={tx.id}

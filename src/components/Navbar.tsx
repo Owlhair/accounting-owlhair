@@ -42,29 +42,26 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-3 sm:px-6">
         <div className="flex items-center justify-between h-16 gap-3">
           
-          {/* Brand Logo with Scratch Theme */}
+          {/* Brand Logo: scracc */}
           <div 
             onClick={() => onTabChange('dashboard')}
             className="flex items-center gap-2.5 cursor-pointer select-none shrink-0"
           >
-            {/* Custom interlocking block logo */}
-            <div className="flex -space-x-1.5 items-center">
-              <div className="w-6 h-6 rounded-md bg-emerald-500 shadow-xs flex items-center justify-center text-white font-black text-[11px]">
-                売
+            {/* Custom geometric block logo */}
+            <div className="flex -space-x-1 items-center">
+              <div className="w-6 h-6 rounded-lg bg-indigo-600 shadow-xs flex items-center justify-center text-white font-black text-xs tracking-tighter">
+                S
               </div>
-              <div className="w-6 h-6 rounded-md bg-amber-500 shadow-xs flex items-center justify-center text-white font-black text-[11px]">
-                費
-              </div>
-              <div className="w-6 h-6 rounded-md bg-indigo-600 shadow-xs flex items-center justify-center text-white font-black text-[11px]">
-                結
+              <div className="w-6 h-6 rounded-lg bg-emerald-500 shadow-xs flex items-center justify-center text-white font-black text-xs tracking-tighter">
+                A
               </div>
             </div>
-            <div>
-              <span className="text-base font-black text-gray-900 tracking-tight flex items-center gap-1">
-                Scratch風経理
-                <span className="text-[10px] font-mono px-1.5 py-0.2 bg-indigo-100 text-indigo-800 rounded font-bold">
-                  v0.1
-                </span>
+            <div className="flex flex-col">
+              <span className="text-base font-black text-gray-900 tracking-tight leading-none">
+                scracc
+              </span>
+              <span className="text-[10px] text-gray-400 font-medium tracking-wide">
+                scratch accounting
               </span>
             </div>
           </div>
