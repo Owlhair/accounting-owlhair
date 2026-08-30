@@ -24,6 +24,7 @@ import {
   calculateFiscalPeriods 
 } from './utils/calculations';
 import { exportTransactionsToCsv } from './utils/csvExport';
+import { writeToActiveHandle } from './utils/fileSystemSync';
 
 import { Navbar, NavTab } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
@@ -38,9 +39,18 @@ import { DataBackupModal } from './components/DataBackupModal';
 import { SettingsModal } from './components/SettingsModal';
 import { TeamChatDrawer } from './components/TeamChatDrawer';
 import { PwaInstallPromptModal } from './components/PwaInstallPromptModal';
+import { LoginScreen, loadAuthState, clearAuthSession } from './components/LoginScreen';
 import { MessageSquareText } from 'lucide-react';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const auth = loadAuthState();
+    return auth.isUnlocked;
+  });
+  const [currentUser, setCurrentUser] = useState<string>(() => {
+    return loadAuthState().user;
+  });
+
   const [transactions, setTransactions] = useState<Transaction[]>(() => loadTransactions());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
@@ -52,6 +62,11 @@ export default function App() {
     } catch (e) {}
     return 'dashboard';
   });
+
+  // Automatically write to linked local ledger file in background whenever transactions, settings, or chat change
+  useEffect(() => {
+    writeToActiveHandle(transactions, settings, chatMessages).catch(() => {});
+  }, [transactions, settings]);
 
   // Save currentTab to localStorage
   useEffect(() => {
@@ -422,22 +437,43 @@ export default function App() {
     restoredChatMessages?: ChatMessage[]
   ) => {
     setTransactions(restoredTransactions);
+    saveTransactions(restoredTransactions);
+
     if (restoredSettings) {
-      setSettings(prev => ({
-        ...prev,
+      const mergedSettings: AppSettings = {
+        ...settings,
         ...restoredSettings,
-        stores: restoredSettings.stores && restoredSettings.stores.length > 0 ? restoredSettings.stores : prev.stores,
+        stores: restoredSettings.stores && restoredSettings.stores.length > 0 ? restoredSettings.stores : settings.stores,
         fiscalSettings: {
-          fiscalYearEndMonth: restoredSettings.fiscalSettings?.fiscalYearEndMonth ?? prev.fiscalSettings.fiscalYearEndMonth,
-          fiscalYearStartYear: restoredSettings.fiscalSettings?.fiscalYearStartYear ?? prev.fiscalSettings.fiscalYearStartYear,
+          fiscalYearEndMonth: restoredSettings.fiscalSettings?.fiscalYearEndMonth ?? settings.fiscalSettings.fiscalYearEndMonth,
+          fiscalYearStartYear: restoredSettings.fiscalSettings?.fiscalYearStartYear ?? settings.fiscalSettings.fiscalYearStartYear,
         },
-      }));
+      };
+      setSettings(mergedSettings);
+      saveSettings(mergedSettings);
     }
     if (restoredChatMessages && Array.isArray(restoredChatMessages)) {
       setChatMessages(restoredChatMessages);
       saveChatMessages(restoredChatMessages);
     }
   };
+
+  // Lock Application handler
+  const handleLockApp = () => {
+    clearAuthSession();
+    setIsAuthenticated(false);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen 
+        onUnlock={(user) => {
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100/60 text-gray-800 flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white relative">
@@ -450,6 +486,8 @@ export default function App() {
         onOpenBackup={() => setIsBackupOpen(true)}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenPwaModal={() => setIsPwaModalOpen(true)}
+        onLockApp={handleLockApp}
+        currentUser={currentUser}
         unconfirmedCount={summary.unconfirmedCount}
         chatMessageCount={chatMessages.length}
       />
@@ -637,6 +675,7 @@ export default function App() {
         onRestoreData={handleRestoreData}
         onResetSampleData={handleResetSampleData}
         onClearAll={handleClearAll}
+        onLockApp={handleLockApp}
       />
 
       <PwaInstallPromptModal

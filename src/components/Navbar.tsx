@@ -10,8 +10,11 @@ import {
   MessageSquareText,
   Users,
   Download,
-  Store
+  Store,
+  Lock,
+  FolderSync
 } from 'lucide-react';
+import { getActiveFileName } from '../utils/fileSystemSync';
 
 export type NavTab = 'dashboard' | 'cards' | 'list' | 'scratch' | 'monthly';
 
@@ -23,6 +26,8 @@ interface NavbarProps {
   onOpenBackup: () => void;
   onOpenChat: () => void;
   onOpenPwaModal?: () => void;
+  onLockApp?: () => void;
+  currentUser?: string;
   unconfirmedCount: number;
   chatMessageCount: number;
 }
@@ -35,9 +40,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenBackup,
   onOpenChat,
   onOpenPwaModal,
+  onLockApp,
+  currentUser,
   unconfirmedCount,
   chatMessageCount,
 }) => {
+  const activeFileName = getActiveFileName();
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200/80 shadow-2xs">
       <div className="max-w-7xl mx-auto px-3 sm:px-6">
@@ -178,14 +186,41 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="sm:hidden">経費</span>
             </button>
 
+            {/* Active file sync status indicator if connected */}
+            {activeFileName && (
+              <button
+                type="button"
+                onClick={onOpenBackup}
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-colors"
+                title={`ローカルファイル「${activeFileName}」と自動同期中`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="max-w-[100px] truncate">{activeFileName}</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onOpenBackup}
-              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200"
-              title="CSV / バックアップ / 設定"
+              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200 relative"
+              title="ファイル自動同期 / バックアップ / 設定"
             >
               <FileSpreadsheet className="w-4 h-4" />
+              {activeFileName && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
+              )}
             </button>
+
+            {onLockApp && (
+              <button
+                type="button"
+                onClick={onLockApp}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors border border-gray-200"
+                title="経理画面をロック（ログアウト）"
+              >
+                <Lock className="w-4 h-4" />
+              </button>
+            )}
 
             {onOpenPwaModal && (
               <button
