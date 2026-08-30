@@ -25,12 +25,13 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Service Worker Registration for PWA Offline Support
+      // Service Worker Registration for PWA Offline Support & Instant Updates
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then((reg) => {
               console.log('PWA Service Worker registered with scope:', reg.scope);
+              reg.update();
             })
             .catch((err) => {
               console.log('PWA Service Worker registration skipped/failed:', err);
