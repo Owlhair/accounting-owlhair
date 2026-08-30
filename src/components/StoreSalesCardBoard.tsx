@@ -71,6 +71,13 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
 
   // Selected Month within current period
   const [activeMonth, setActiveMonth] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_active_card_month');
+      if (saved && currentPeriod?.months?.includes(saved)) {
+        return saved;
+      }
+    } catch (e) {}
+
     if (currentPeriod?.months?.length > 0) {
       // Find month with most recent transactions, or default to first month
       const monthWithTx = currentPeriod.months.find(m => 
@@ -81,6 +88,15 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
     return '2025-05';
   });
 
+  // Save activeMonth to localStorage
+  React.useEffect(() => {
+    try {
+      if (activeMonth) {
+        localStorage.setItem('scratch_keiri_active_card_month', activeMonth);
+      }
+    } catch (e) {}
+  }, [activeMonth]);
+
   // Keep active month in sync when period changes
   React.useEffect(() => {
     if (currentPeriod?.months?.length > 0 && !currentPeriod.months.includes(activeMonth)) {
@@ -89,7 +105,22 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
   }, [currentPeriod, activeMonth]);
 
   // View Mode: 'cards' | 'matrix' | 'comparison'
-  const [viewMode, setViewMode] = useState<'cards' | 'matrix' | 'comparison'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'matrix' | 'comparison'>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_card_view_mode');
+      if (saved && ['cards', 'matrix', 'comparison'].includes(saved)) {
+        return saved as 'cards' | 'matrix' | 'comparison';
+      }
+    } catch (e) {}
+    return 'cards';
+  });
+
+  // Save viewMode to localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('scratch_keiri_card_view_mode', viewMode);
+    } catch (e) {}
+  }, [viewMode]);
 
   // Modal State for editing a store card
   const [modalStore, setModalStore] = useState<string | null>(null);

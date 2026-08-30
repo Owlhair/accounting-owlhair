@@ -43,20 +43,58 @@ import { MessageSquareText } from 'lucide-react';
 export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>(() => loadTransactions());
   const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_current_tab');
+      if (saved && ['dashboard', 'cards', 'list', 'scratch', 'monthly'].includes(saved)) {
+        return saved as NavTab;
+      }
+    } catch (e) {}
+    return 'dashboard';
+  });
+
+  // Save currentTab to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('scratch_keiri_current_tab', currentTab);
+    } catch (e) {}
+  }, [currentTab]);
 
   // Compute fiscal periods automatically based on settings and transactions
   const fiscalPeriods = useMemo(() => {
     return calculateFiscalPeriods(transactions, settings.fiscalSettings);
   }, [transactions, settings.fiscalSettings]);
 
-  // Selected filter (Defaults to the active period with data, or first period)
+  // Selected filter (Defaults to saved filter, or period with active transactions)
   const [selectedFilter, setSelectedFilter] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_selected_filter');
+      if (saved) return saved;
+    } catch (e) {}
+
     const loaded = loadTransactions();
     const loadedSettings = loadSettings();
     const periods = calculateFiscalPeriods(loaded, loadedSettings.fiscalSettings);
+    
+    // Find the period with the most recent transaction
+    if (loaded.length > 0) {
+      for (const period of periods.slice().reverse()) {
+        const hasTx = loaded.some(t => {
+          const m = (t.date_from || t.date_to || '').substring(0, 7);
+          return period.months.includes(m);
+        });
+        if (hasTx) return period.key;
+      }
+    }
     return periods[0]?.key || 'ALL';
   });
+
+  // Save selectedFilter to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('scratch_keiri_selected_filter', selectedFilter);
+    } catch (e) {}
+  }, [selectedFilter]);
 
   // Keep selected filter valid if periods update
   useEffect(() => {
@@ -166,12 +204,20 @@ export default function App() {
       updated_at: timestamp,
     }));
 
-    setTransactions(prev => [...created, ...prev]);
+    setTransactions(prev => {
+      const updated = [...created, ...prev];
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   // Handler: Update Transaction
   const handleUpdateTransaction = (updated: Transaction) => {
-    setTransactions(prev => prev.map(t => (t.id === updated.id ? updated : t)));
+    setTransactions(prev => {
+      const next = prev.map(t => (t.id === updated.id ? updated : t));
+      saveTransactions(next);
+      return next;
+    });
 
     // Also update any chat messages that reference this transaction
     setChatMessages(prev =>
@@ -197,66 +243,75 @@ export default function App() {
       created_at: timestamp,
       updated_at: timestamp,
     };
-    setTransactions(prev => [duplicated, ...prev]);
+    setTransactions(prev => {
+      const updated = [duplicated, ...prev];
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   // Handler: Delete Transaction
   const handleDeleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    setTransactions(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   // Handler: Toggle Confirmed Status
   const handleToggleConfirm = (id: string) => {
-    setTransactions(prev =>
-      prev.map(t => {
+    setTransactions(prev => {
+      const updated = prev.map(t => {
         if (t.id === id) {
           const nextConfirmed = !t.confirmed;
-          const updated = { ...t, confirmed: nextConfirmed, updated_at: new Date().toISOString() };
-          
-          setChatMessages(chatPrev =>
-            chatPrev.map(msg =>
-              msg.transactionRef && msg.transactionRef.id === id
-                ? { ...msg, transactionRef: createTransactionRef(updated) }
-                : msg
-            )
-          );
-
-          return updated;
+          return { ...t, confirmed: nextConfirmed, updated_at: new Date().toISOString() };
         }
         return t;
-      })
-    );
+      });
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   // Handler: Bulk Confirm
   const handleBulkConfirm = (ids: string[]) => {
     const set = new Set(ids);
-    setTransactions(prev =>
-      prev.map(t => {
+    setTransactions(prev => {
+      const updated = prev.map(t => {
         if (set.has(t.id)) {
-          const updated = { ...t, confirmed: true, updated_at: new Date().toISOString() };
-          return updated;
+          return { ...t, confirmed: true, updated_at: new Date().toISOString() };
         }
         return t;
-      })
-    );
+      });
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   // Handler: Add Category
   const handleAddCategory = (category: string, type: 'sales' | 'expense') => {
     if (type === 'sales') {
       if (!settings.salesCategories.includes(category)) {
-        setSettings(prev => ({
-          ...prev,
-          salesCategories: [...prev.salesCategories, category],
-        }));
+        setSettings(prev => {
+          const updated = {
+            ...prev,
+            salesCategories: [...prev.salesCategories, category],
+          };
+          saveSettings(updated);
+          return updated;
+        });
       }
     } else {
       if (!settings.expenseCategories.includes(category)) {
-        setSettings(prev => ({
-          ...prev,
-          expenseCategories: [...prev.expenseCategories, category],
-        }));
+        setSettings(prev => {
+          const updated = {
+            ...prev,
+            expenseCategories: [...prev.expenseCategories, category],
+          };
+          saveSettings(updated);
+          return updated;
+        });
       }
     }
   };
@@ -274,38 +329,42 @@ export default function App() {
     const dateTo = `${month}-${String(lastDay).padStart(2, '0')}`;
     const timestamp = new Date().toISOString();
 
-    // Filter out existing monthly sales transactions for this store & month
-    const nonStoreMonthlyTx = transactions.filter(t => {
-      const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
-      const txStore = t.store || '全社共通';
-      return !(t.type === 'sales' && t.granularity === 'monthly' && txStore === store && txMonth === month);
-    });
+    setTransactions(prev => {
+      // Filter out existing sales transactions for this store & month
+      const nonStoreMonthlyTx = prev.filter(t => {
+        const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
+        const txStore = t.store || '全社共通';
+        return !(t.type === 'sales' && txStore === store && txMonth === month);
+      });
 
-    // Create new transactions for each payment method in breakdown
-    const newItems: Transaction[] = [];
-    Object.entries(breakdown).forEach(([method, amount], idx) => {
-      if (amount > 0) {
-        newItems.push({
-          id: `tx-${month.replace('-', '')}-${store}-${method}-${Date.now()}-${idx}`,
-          date_from: dateFrom,
-          date_to: dateTo,
-          type: 'sales',
-          category: '技術売上',
-          store: store,
-          amount: amount,
-          payment_method: method,
-          granularity: 'monthly',
-          description: `${store} ${month} 売上 (${method})`,
-          memo: memo || `${store} ${month}度 売上カード`,
-          source_type: 'manual',
-          confirmed: true,
-          created_at: timestamp,
-          updated_at: timestamp,
-        });
-      }
-    });
+      // Create new transactions for each payment method in breakdown
+      const newItems: Transaction[] = [];
+      Object.entries(breakdown).forEach(([method, amount], idx) => {
+        if (amount > 0) {
+          newItems.push({
+            id: `tx-${month.replace('-', '')}-${store}-${method}-${Date.now()}-${idx}`,
+            date_from: dateFrom,
+            date_to: dateTo,
+            type: 'sales',
+            category: '技術売上',
+            store: store,
+            amount: amount,
+            payment_method: method,
+            granularity: 'monthly',
+            description: `${store} ${month} 売上 (${method})`,
+            memo: memo || `${store} ${month}度 売上カード`,
+            source_type: 'manual',
+            confirmed: true,
+            created_at: timestamp,
+            updated_at: timestamp,
+          });
+        }
+      });
 
-    setTransactions([...newItems, ...nonStoreMonthlyTx]);
+      const updated = [...newItems, ...nonStoreMonthlyTx];
+      saveTransactions(updated);
+      return updated;
+    });
   };
 
   // Handler: Save Settings (Fiscal & Stores)
