@@ -1,6 +1,7 @@
 import React from 'react';
 import { Transaction, FiscalPeriod } from '../types';
 import { calculateSummary, formatCurrency } from '../utils/calculations';
+import { calculateFinancialStatement } from '../utils/taxCalculations';
 import { ScratchBlockCard } from './ScratchBlockCard';
 import { 
   TrendingUp, 
@@ -14,7 +15,11 @@ import {
   SlidersHorizontal,
   Building2,
   Store,
-  CreditCard
+  CreditCard,
+  Calculator,
+  Landmark,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -26,7 +31,7 @@ interface DashboardProps {
   onOpenAddSales: () => void;
   onOpenAddExpense: () => void;
   onOpenFiscalSettings: () => void;
-  onNavigateToTab: (tab: 'cards' | 'list' | 'scratch' | 'monthly') => void;
+  onNavigateToTab: (tab: 'cards' | 'list' | 'scratch' | 'monthly' | 'statement') => void;
   onEdit: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
   onDelete: (id: string) => void;
@@ -51,6 +56,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onQuoteInChat,
 }) => {
   const summary = calculateSummary(transactions, selectedFilter, fiscalPeriods);
+
+  const currentPeriod = React.useMemo(() => {
+    if (selectedFilter.startsWith('period-')) {
+      return fiscalPeriods.find(p => p.key === selectedFilter) || fiscalPeriods[0] || null;
+    }
+    return fiscalPeriods[0] || null;
+  }, [selectedFilter, fiscalPeriods]);
+
+  const statement = React.useMemo(() => {
+    return calculateFinancialStatement(transactions, currentPeriod, fiscalPeriods);
+  }, [transactions, currentPeriod, fiscalPeriods]);
 
   // Filtered transactions for recent preview
   const currentFilteredTransactions = transactions.filter(t => {
@@ -238,6 +254,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="mt-2 text-[11px] text-indigo-600 flex items-center gap-1 font-medium">
             <span>一覧で確認する</span>
             <ArrowRight className="w-3 h-3" />
+          </div>
+        </div>
+      </div>
+
+      {/* Real-time Estimated Financial Statement & Tax Simulator Banner */}
+      <div 
+        onClick={() => onNavigateToTab('statement')}
+        className="cursor-pointer bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-slate-950 hover:to-indigo-900 text-white rounded-3xl p-5 sm:p-6 shadow-md transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-500/30 group"
+      >
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="p-3 bg-indigo-500/20 border border-indigo-400/30 rounded-2xl text-indigo-300 shrink-0 group-hover:scale-105 transition-transform">
+            <Calculator className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-base text-white flex items-center gap-1.5">
+                想定決算書 ＆ 税金シミュレーター (P/L)
+              </span>
+              <span className="text-[10px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                リアルタイム自動算出
+              </span>
+            </div>
+            <p className="text-xs text-indigo-200 mt-1 font-medium leading-relaxed">
+              現在入力済（{statement.elapsedMonths}ヶ月）の想定税引前利益は <span className="text-emerald-400 font-bold font-mono">{formatCurrency(statement.profitBeforeTax)}</span>、
+              想定法人税等は <span className="text-amber-300 font-bold font-mono">{formatCurrency(statement.taxEstimation.totalCorporateIncomeTaxes)}</span>（実効税率 {statement.taxEstimation.effectiveTaxRate}%）です。
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+          <div className="hidden lg:block text-right pr-2">
+            <span className="text-[10px] text-gray-400 block font-bold">年間着地予想 利益</span>
+            <span className="text-xs font-black text-emerald-400 font-mono">
+              {formatCurrency(statement.fullYearProjection.projectedProfit)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-xs transition-colors">
+            <span>決算書・節税策を見る</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>
       </div>

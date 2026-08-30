@@ -12,11 +12,13 @@ import {
   Download,
   Store,
   Lock,
-  FolderSync
+  FolderSync,
+  Calculator,
+  FileText
 } from 'lucide-react';
 import { getActiveFileName } from '../utils/fileSystemSync';
 
-export type NavTab = 'dashboard' | 'cards' | 'list' | 'scratch' | 'monthly';
+export type NavTab = 'dashboard' | 'cards' | 'list' | 'scratch' | 'monthly' | 'statement';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -24,7 +26,7 @@ interface NavbarProps {
   onOpenAddSales: () => void;
   onOpenAddExpense: () => void;
   onOpenBackup: () => void;
-  onOpenChat: () => void;
+  onOpenChat?: () => void;
   onOpenPwaModal?: () => void;
   onLockApp?: () => void;
   currentUser?: string;
@@ -146,26 +148,23 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Calendar className="w-3.5 h-3.5" />
               月別集計
             </button>
+
+            <button
+              type="button"
+              onClick={() => onTabChange('statement')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                currentTab === 'statement'
+                  ? 'bg-white text-indigo-950 shadow-xs ring-1 ring-indigo-200'
+                  : 'text-gray-600 hover:text-indigo-900'
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5 text-amber-500" />
+              <span>想定決算・税金 (P/L)</span>
+            </button>
           </nav>
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Team Chat Action Button */}
-            <button
-              type="button"
-              onClick={onOpenChat}
-              className="px-2.5 sm:px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 text-xs font-bold rounded-xl border border-indigo-200 transition-colors flex items-center gap-1.5 shadow-2xs relative"
-              title="チームチャットを開く"
-            >
-              <MessageSquareText className="w-4 h-4 text-indigo-600" />
-              <span className="hidden sm:inline">チームチャット</span>
-              {chatMessageCount > 0 && (
-                <span className="px-1.5 py-0.2 text-[10px] bg-indigo-600 text-white rounded-full font-mono">
-                  {chatMessageCount}
-                </span>
-              )}
-            </button>
-
             <button
               type="button"
               onClick={onOpenAddSales}
@@ -281,15 +280,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           <button
             type="button"
-            onClick={onOpenChat}
-            className="py-1 px-2 rounded-lg text-indigo-600 font-bold flex items-center gap-0.5 shrink-0"
+            onClick={() => onTabChange('statement')}
+            className={`py-1 px-2 rounded-lg shrink-0 flex items-center gap-1 ${currentTab === 'statement' ? 'text-indigo-900 bg-indigo-50 font-extrabold' : 'text-amber-700 font-bold'}`}
           >
-            チャット
-            {chatMessageCount > 0 && (
-              <span className="px-1 py-0.2 text-[8px] bg-indigo-600 text-white rounded-full">
-                {chatMessageCount}
-              </span>
-            )}
+            決算・税金
           </button>
         </div>
       </div>

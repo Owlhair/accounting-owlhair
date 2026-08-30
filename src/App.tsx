@@ -32,6 +32,7 @@ import { TransactionList } from './components/TransactionList';
 import { ScratchFlowView } from './components/ScratchFlowView';
 import { MonthlyAggregationView } from './components/MonthlyAggregationView';
 import { StoreSalesCardBoard } from './components/StoreSalesCardBoard';
+import { FinancialStatementView } from './components/FinancialStatementView';
 import { AddSalesModal } from './components/AddSalesModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
 import { TransactionEditModal } from './components/TransactionEditModal';
@@ -56,7 +57,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
     try {
       const saved = localStorage.getItem('scratch_keiri_current_tab');
-      if (saved && ['dashboard', 'cards', 'list', 'scratch', 'monthly'].includes(saved)) {
+      if (saved && ['dashboard', 'cards', 'list', 'scratch', 'monthly', 'statement'].includes(saved)) {
         return saved as NavTab;
       }
     } catch (e) {}
@@ -574,28 +575,17 @@ export default function App() {
             onNavigateToTab={setCurrentTab}
           />
         )}
-      </main>
 
-      {/* Floating Chat Trigger Button (Bottom Right) */}
-      <div className="fixed bottom-5 right-5 z-40">
-        <button
-          type="button"
-          onClick={() => setIsChatOpen(true)}
-          className="group flex items-center gap-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-4 py-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95 border border-indigo-400/30"
-          title="チームチャットを開く"
-        >
-          <div className="relative">
-            <MessageSquareText className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-indigo-700 rounded-full" />
-          </div>
-          <span className="text-xs font-bold tracking-tight">チームチャット</span>
-          {chatMessages.length > 0 && (
-            <span className="bg-indigo-900/80 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border border-indigo-400/30">
-              {chatMessages.length}
-            </span>
-          )}
-        </button>
-      </div>
+        {currentTab === 'statement' && (
+          <FinancialStatementView
+            transactions={transactions}
+            fiscalPeriods={fiscalPeriods}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            onOpenAddExpense={() => setIsAddExpenseOpen(true)}
+          />
+        )}
+      </main>
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white/70 py-4 text-center text-xs text-gray-500">
