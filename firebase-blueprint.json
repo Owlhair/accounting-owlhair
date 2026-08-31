@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Bookkeeping journal entry representing revenue or expense",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "account": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "taxType": { "type": "string" },
+        "memo": { "type": "string" },
+        "storeId": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "date", "title", "amount", "type"]
+    },
+    "FiscalPeriod": {
+      "title": "FiscalPeriod",
+      "description": "Fiscal year accounting period definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "periodNumber": { "type": "number" },
+        "year": { "type": "number" },
+        "startMonth": { "type": "number" },
+        "endMonth": { "type": "number" },
+        "name": { "type": "string" },
+        "isCurrent": { "type": "boolean" },
+        "isLocked": { "type": "boolean" },
+        "lockedAt": { "type": "string" }
+      },
+      "required": ["id", "periodNumber", "year", "startMonth", "endMonth", "name"]
+    },
+    "StoreSalesCard": {
+      "title": "StoreSalesCard",
+      "description": "Store quick daily sales configuration card",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeName": { "type": "string" },
+        "targetAccount": { "type": "string" },
+        "taxCategory": { "type": "string" },
+        "memoTemplate": { "type": "string" },
+        "themeColor": { "type": "string" },
+        "defaultAmount": { "type": "number" }
+      },
+      "required": ["id", "storeName", "targetAccount"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Team chat internal messaging",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender": { "type": "string" },
+        "role": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "sender", "message", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "All income and expense bookkeeping transaction documents"
+    },
+    "/fiscalPeriods/{periodId}": {
+      "schema": "FiscalPeriod",
+      "description": "Fiscal year accounting configurations"
+    },
+    "/storeCards/{cardId}": {
+      "schema": "StoreSalesCard",
+      "description": "Store quick sales cards"
+    },
+    "/chatMessages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Team communication messages"
+    }
+  }
+}

@@ -14,7 +14,10 @@ import {
   Lock,
   FolderSync,
   Calculator,
-  FileText
+  FileText,
+  Cloud,
+  CloudCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { getActiveFileName } from '../utils/fileSystemSync';
 
@@ -32,6 +35,8 @@ interface NavbarProps {
   currentUser?: string;
   unconfirmedCount: number;
   chatMessageCount: number;
+  isCloudConnected?: boolean;
+  isCloudSyncing?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -46,6 +51,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   unconfirmedCount,
   chatMessageCount,
+  isCloudConnected = true,
+  isCloudSyncing = false,
 }) => {
   const activeFileName = getActiveFileName();
   return (
@@ -165,6 +172,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Cloud Realtime Sync Live Badge */}
+            <div 
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50/90 border border-indigo-200/80 text-indigo-700 rounded-xl text-[11px] font-bold shadow-2xs"
+              title={isCloudConnected ? 'Google Cloud (Firestore) リアルタイム同期中：全デバイスで即時反映されます' : 'オフラインモード（ローカル保存中）'}
+            >
+              <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+              <span className="hidden sm:inline font-semibold">
+                {isCloudSyncing ? 'クラウド同期中' : 'クラウド同期中'}
+              </span>
+              <span className="sm:hidden text-[10px]">同期中</span>
+            </div>
+
             <button
               type="button"
               onClick={onOpenAddSales}

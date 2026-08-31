@@ -25,6 +25,13 @@ import {
 } from './utils/calculations';
 import { exportTransactionsToCsv } from './utils/csvExport';
 import { writeToActiveHandle } from './utils/fileSystemSync';
+import { 
+  initFirestoreRealtimeSync,
+  syncSaveTransactionToFirestore,
+  syncDeleteTransactionFromFirestore,
+  syncSaveSettingsToFirestore,
+  syncAddChatMessageToFirestore
+} from './utils/firestoreSync';
 
 import { Navbar, NavTab } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
@@ -172,12 +179,35 @@ export default function App() {
     saveCurrentMember(currentMember);
   }, [currentMember]);
 
-  // Real-time synchronization subscription across browser tabs
+  // Real-time synchronization subscription across browser tabs & devices via Firebase Firestore
+  const [isCloudConnected, setIsCloudConnected] = useState(true);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+
   useEffect(() => {
-    const unsubscribe = subscribeToChatUpdates((updatedMessages) => {
+    const unsubscribeFirestore = initFirestoreRealtimeSync({
+      onTransactionsUpdate: (cloudTx) => {
+        setTransactions(cloudTx);
+      },
+      onSettingsUpdate: (cloudSettings) => {
+        setSettings(cloudSettings);
+      },
+      onChatUpdate: (cloudChat) => {
+        setChatMessages(cloudChat);
+      },
+      onStatusChange: (status) => {
+        setIsCloudConnected(status.isConnected);
+        setIsCloudSyncing(status.isSyncing);
+      },
+    });
+
+    const unsubscribeLocalChat = subscribeToChatUpdates((updatedMessages) => {
       setChatMessages(updatedMessages);
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeFirestore?.();
+      unsubscribeLocalChat();
+    };
   }, []);
 
   // Derived available months for optional single-month drilldown
@@ -202,6 +232,7 @@ export default function App() {
     const nextMessages = [...chatMessages, newMsg];
     setChatMessages(nextMessages);
     saveChatMessages(nextMessages);
+    syncAddChatMessageToFirestore(newMsg);
   };
 
   // Chat: Quote transaction & open drawer
@@ -225,6 +256,8 @@ export default function App() {
       saveTransactions(updated);
       return updated;
     });
+
+    created.forEach(tx => syncSaveTransactionToFirestore(tx));
   };
 
   // Handler: Update Transaction
@@ -234,6 +267,8 @@ export default function App() {
       saveTransactions(next);
       return next;
     });
+
+    syncSaveTransactionToFirestore(updated);
 
     // Also update any chat messages that reference this transaction
     setChatMessages(prev =>
@@ -264,6 +299,7 @@ export default function App() {
       saveTransactions(updated);
       return updated;
     });
+    syncSaveTransactionToFirestore(duplicated);
   };
 
   // Handler: Delete Transaction
@@ -273,6 +309,7 @@ export default function App() {
       saveTransactions(updated);
       return updated;
     });
+    syncDeleteTransactionFromFirestore(id);
   };
 
   // Handler: Toggle Confirmed Status
@@ -281,7 +318,9 @@ export default function App() {
       const updated = prev.map(t => {
         if (t.id === id) {
           const nextConfirmed = !t.confirmed;
-          return { ...t, confirmed: nextConfirmed, updated_at: new Date().toISOString() };
+          const nextTx = { ...t, confirmed: nextConfirmed, updated_at: new Date().toISOString() };
+          syncSaveTransactionToFirestore(nextTx);
+          return nextTx;
         }
         return t;
       });
@@ -296,7 +335,9 @@ export default function App() {
     setTransactions(prev => {
       const updated = prev.map(t => {
         if (set.has(t.id)) {
-          return { ...t, confirmed: true, updated_at: new Date().toISOString() };
+          const nextTx = { ...t, confirmed: true, updated_at: new Date().toISOString() };
+          syncSaveTransactionToFirestore(nextTx);
+          return nextTx;
         }
         return t;
       });
@@ -315,6 +356,7 @@ export default function App() {
             salesCategories: [...prev.salesCategories, category],
           };
           saveSettings(updated);
+          syncSaveSettingsToFirestore(updated);
           return updated;
         });
       }
@@ -326,6 +368,7 @@ export default function App() {
             expenseCategories: [...prev.expenseCategories, category],
           };
           saveSettings(updated);
+          syncSaveSettingsToFirestore(updated);
           return updated;
         });
       }
@@ -353,11 +396,18 @@ export default function App() {
         return !(t.type === 'sales' && txStore === store && txMonth === month);
       });
 
+      // Delete removed tx from firestore
+      prev.filter(t => {
+        const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
+        const txStore = t.store || '全社共通';
+        return (t.type === 'sales' && txStore === store && txMonth === month);
+      }).forEach(t => syncDeleteTransactionFromFirestore(t.id));
+
       // Create new transactions for each payment method in breakdown
       const newItems: Transaction[] = [];
       Object.entries(breakdown).forEach(([method, amount], idx) => {
         if (amount > 0) {
-          newItems.push({
+          const item: Transaction = {
             id: `tx-${month.replace('-', '')}-${store}-${method}-${Date.now()}-${idx}`,
             date_from: dateFrom,
             date_to: dateTo,
@@ -373,7 +423,9 @@ export default function App() {
             confirmed: true,
             created_at: timestamp,
             updated_at: timestamp,
-          });
+          };
+          newItems.push(item);
+          syncSaveTransactionToFirestore(item);
         }
       });
 
@@ -389,11 +441,15 @@ export default function App() {
       newFiscalSettings.fiscalYearEndMonth !== settings.fiscalSettings.fiscalYearEndMonth ||
       newFiscalSettings.fiscalYearStartYear !== settings.fiscalSettings.fiscalYearStartYear;
 
-    setSettings(prev => ({
-      ...prev,
+    const updatedSettings: AppSettings = {
+      ...settings,
       fiscalSettings: newFiscalSettings,
       stores: newStores,
-    }));
+    };
+
+    setSettings(updatedSettings);
+    saveSettings(updatedSettings);
+    syncSaveSettingsToFirestore(updatedSettings);
 
     // If fiscal year settings did not change (e.g. user only added or edited stores), DO NOT CHANGE selectedFilter!
     if (!isFiscalChanged) {
@@ -491,6 +547,8 @@ export default function App() {
         currentUser={currentUser}
         unconfirmedCount={summary.unconfirmedCount}
         chatMessageCount={chatMessages.length}
+        isCloudConnected={isCloudConnected}
+        isCloudSyncing={isCloudSyncing}
       />
 
       {/* Main Container */}
