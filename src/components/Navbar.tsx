@@ -37,6 +37,7 @@ interface NavbarProps {
   chatMessageCount: number;
   isCloudConnected?: boolean;
   isCloudSyncing?: boolean;
+  onManualCloudSync?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -53,6 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   chatMessageCount,
   isCloudConnected = true,
   isCloudSyncing = false,
+  onManualCloudSync,
 }) => {
   const activeFileName = getActiveFileName();
   return (
@@ -173,16 +175,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Right Action Buttons */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Cloud Realtime Sync Live Badge */}
-            <div 
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50/90 border border-indigo-200/80 text-indigo-700 rounded-xl text-[11px] font-bold shadow-2xs"
-              title={isCloudConnected ? 'Google Cloud (Firestore) リアルタイム同期中：全デバイスで即時反映されます' : 'オフラインモード（ローカル保存中）'}
+            <button
+              type="button"
+              onClick={onManualCloudSync}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50/90 hover:bg-indigo-100/90 border border-indigo-200/80 text-indigo-700 rounded-xl text-[11px] font-bold shadow-2xs transition-colors cursor-pointer"
+              title={isCloudConnected ? 'Google Cloud (Firestore) リアルタイム同期中：クリックで今すぐ強制同期' : 'オフラインモード（ローカル保存中）'}
             >
-              <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+              <RefreshCw className={`w-3 h-3 text-indigo-600 ${isCloudSyncing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline font-semibold">
-                {isCloudSyncing ? 'クラウド同期中' : 'クラウド同期中'}
+                {isCloudSyncing ? 'クラウド同期中...' : 'クラウド同期中'}
               </span>
-              <span className="sm:hidden text-[10px]">同期中</span>
-            </div>
+              <span className="sm:hidden text-[10px]">
+                {isCloudSyncing ? '同期中' : '同期中'}
+              </span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            </button>
 
             <button
               type="button"

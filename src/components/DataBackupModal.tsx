@@ -37,6 +37,8 @@ interface DataBackupModalProps {
   onResetSampleData: () => void;
   onClearAll: () => void;
   onLockApp?: () => void;
+  onForceUploadToCloud?: () => void;
+  onForcePullFromCloud?: () => void;
 }
 
 export const DataBackupModal: React.FC<DataBackupModalProps> = ({
@@ -49,6 +51,8 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onResetSampleData,
   onClearAll,
   onLockApp,
+  onForceUploadToCloud,
+  onForcePullFromCloud,
 }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -223,6 +227,46 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Section 0.5: Google Cloud (Firestore) Realtime Cloud Sync */}
+          <div className="p-4 bg-gradient-to-br from-blue-50 via-indigo-50/50 to-blue-50/70 border border-blue-200/90 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-black text-xs text-blue-950">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Google Cloud リアルタイム同期（複数デバイス）</span>
+              </div>
+              <span className="text-[10px] font-black bg-blue-600 text-white px-2.5 py-0.5 rounded-full shadow-xs">
+                Firestore連携中
+              </span>
+            </div>
+
+            <p className="text-[11px] text-blue-950/85 leading-relaxed font-medium">
+              iPhone・スマホ・PCなど複数の端末で同じURLを開くと、リアルタイムに数字や取引が自動同期されます。
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              {onForceUploadToCloud && (
+                <button
+                  type="button"
+                  onClick={onForceUploadToCloud}
+                  className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  この端末の全データを送信
+                </button>
+              )}
+              {onForcePullFromCloud && (
+                <button
+                  type="button"
+                  onClick={onForcePullFromCloud}
+                  className="py-2.5 px-3 bg-white hover:bg-blue-50 border border-blue-300 text-blue-950 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
+                  クラウドから最新を受信
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Section 1: JSON Restore */}

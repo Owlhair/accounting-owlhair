@@ -30,7 +30,9 @@ import {
   syncSaveTransactionToFirestore,
   syncDeleteTransactionFromFirestore,
   syncSaveSettingsToFirestore,
-  syncAddChatMessageToFirestore
+  syncAddChatMessageToFirestore,
+  uploadAllTransactionsToFirestore,
+  pullLatestFromFirestore,
 } from './utils/firestoreSync';
 
 import { Navbar, NavTab } from './components/Navbar';
@@ -475,9 +477,11 @@ export default function App() {
   const handleResetSampleData = () => {
     const data = resetToSampleData();
     setTransactions(data);
-    setChatMessages(resetToSampleChat());
+    const sampleChat = resetToSampleChat();
+    setChatMessages(sampleChat);
     const periods = calculateFiscalPeriods(data, settings.fiscalSettings);
     setSelectedFilter(periods[0]?.key || 'ALL');
+    uploadAllTransactionsToFirestore(data);
   };
 
   // Handler: Clear All
@@ -485,6 +489,7 @@ export default function App() {
     const data = clearAllData();
     setTransactions(data);
     setChatMessages(clearChatMessages());
+    uploadAllTransactionsToFirestore([]);
   };
 
   // Handler: Restore from JSON (Transactions + Settings + Chat)
@@ -495,6 +500,7 @@ export default function App() {
   ) => {
     setTransactions(restoredTransactions);
     saveTransactions(restoredTransactions);
+    uploadAllTransactionsToFirestore(restoredTransactions);
 
     if (restoredSettings) {
       const mergedSettings: AppSettings = {
@@ -508,10 +514,48 @@ export default function App() {
       };
       setSettings(mergedSettings);
       saveSettings(mergedSettings);
+      syncSaveSettingsToFirestore(mergedSettings);
     }
     if (restoredChatMessages && Array.isArray(restoredChatMessages)) {
       setChatMessages(restoredChatMessages);
       saveChatMessages(restoredChatMessages);
+    }
+  };
+
+  // Handler: Force Push / Pull manual sync
+  const handleForceUploadToCloud = async () => {
+    setIsCloudSyncing(true);
+    const success = await uploadAllTransactionsToFirestore(transactions);
+    await syncSaveSettingsToFirestore(settings);
+    setIsCloudSyncing(false);
+    if (success) {
+      alert(`クラウドへ取引データ（${transactions.length}件）を正常に同期・送信しました！他の端末をリロードまたは確認してください。`);
+    } else {
+      alert('クラウド同期に失敗しました。ネットワーク接続をご確認ください。');
+    }
+  };
+
+  const handleForcePullFromCloud = async () => {
+    setIsCloudSyncing(true);
+    try {
+      const result = await pullLatestFromFirestore();
+      if (result.transactions.length > 0) {
+        setTransactions(result.transactions);
+        saveTransactions(result.transactions);
+      }
+      if (result.settings) {
+        setSettings(result.settings);
+        saveSettings(result.settings);
+      }
+      if (result.chatMessages.length > 0) {
+        setChatMessages(result.chatMessages);
+        saveChatMessages(result.chatMessages);
+      }
+      alert(`クラウドから最新データ（取引 ${result.transactions.length} 件）を受信・同期しました！`);
+    } catch (e: any) {
+      alert('クラウドからのデータ取得に失敗しました: ' + e.message);
+    } finally {
+      setIsCloudSyncing(false);
     }
   };
 
@@ -549,6 +593,7 @@ export default function App() {
         chatMessageCount={chatMessages.length}
         isCloudConnected={isCloudConnected}
         isCloudSyncing={isCloudSyncing}
+        onManualCloudSync={handleForcePullFromCloud}
       />
 
       {/* Main Container */}
@@ -724,6 +769,8 @@ export default function App() {
         onResetSampleData={handleResetSampleData}
         onClearAll={handleClearAll}
         onLockApp={handleLockApp}
+        onForceUploadToCloud={handleForceUploadToCloud}
+        onForcePullFromCloud={handleForcePullFromCloud}
       />
 
       <PwaInstallPromptModal

@@ -23,7 +23,7 @@ export interface FirestoreSyncCallback {
   onTransactionsUpdate?: (transactions: Transaction[]) => void;
   onSettingsUpdate?: (settings: AppSettings) => void;
   onChatUpdate?: (messages: ChatMessage[]) => void;
-  onStatusChange?: (status: { isConnected: boolean; isSyncing: boolean }) => void;
+  onStatusChange?: (status: { isConnected: boolean; isSyncing: boolean; message?: string }) => void;
 }
 
 /**
@@ -31,10 +31,7 @@ export interface FirestoreSyncCallback {
  * Whenever any device updates transactions, settings, or chat, all connected devices update instantly!
  */
 export function initFirestoreRealtimeSync(callbacks: FirestoreSyncCallback) {
-  if (isListening) return;
-  isListening = true;
-
-  callbacks.onStatusChange?.({ isConnected: true, isSyncing: true });
+  callbacks.onStatusChange?.({ isConnected: true, isSyncing: true, message: 'クラウド接続中...' });
 
   // 1. Transactions realtime listener
   const txColRef = collection(db, TRANSACTIONS_COL);
@@ -50,21 +47,22 @@ export function initFirestoreRealtimeSync(callbacks: FirestoreSyncCallback) {
         // Sort by date descending
         cloudTxList.sort((a, b) => (b.date_from || '').localeCompare(a.date_from || ''));
         
-        // Update local cache
+        // Update local cache & state
         saveTransactions(cloudTxList);
         callbacks.onTransactionsUpdate?.(cloudTxList);
+        callbacks.onStatusChange?.({ isConnected: true, isSyncing: false, message: `クラウド同期中 (${cloudTxList.length}件)` });
       } else {
-        // If Firestore is empty but local has initial data, seed to Firestore
+        // If Firestore is empty on the cloud, seed current local transactions
         const localTx = loadTransactions();
         if (localTx.length > 0) {
-          uploadLocalTransactionsToFirestore(localTx);
+          uploadAllTransactionsToFirestore(localTx);
         }
+        callbacks.onStatusChange?.({ isConnected: true, isSyncing: false, message: 'クラウド同期済' });
       }
-      callbacks.onStatusChange?.({ isConnected: true, isSyncing: false });
     },
     (error) => {
       console.warn('Firestore transactions listener error:', error);
-      callbacks.onStatusChange?.({ isConnected: false, isSyncing: false });
+      callbacks.onStatusChange?.({ isConnected: false, isSyncing: false, message: 'クラウド接続エラー' });
     }
   );
 
@@ -114,19 +112,17 @@ export function initFirestoreRealtimeSync(callbacks: FirestoreSyncCallback) {
     }
   );
 
-  // Test connection on boot
   testFirestoreConnection();
 
   return () => {
     unsubTx();
     unsubSettings();
     unsubChat();
-    isListening = false;
   };
 }
 
 /**
- * Save / Update a transaction to Firestore
+ * Save / Update a single transaction to Firestore
  */
 export async function syncSaveTransactionToFirestore(transaction: Transaction) {
   try {
@@ -140,7 +136,7 @@ export async function syncSaveTransactionToFirestore(transaction: Transaction) {
 }
 
 /**
- * Delete a transaction from Firestore
+ * Delete a single transaction from Firestore
  */
 export async function syncDeleteTransactionFromFirestore(transactionId: string) {
   try {
@@ -182,19 +178,72 @@ export async function syncAddChatMessageToFirestore(message: ChatMessage) {
 }
 
 /**
- * Batch upload local transactions to Firestore
+ * Upload all transactions to Firestore (Overwrites collection)
  */
-export async function uploadLocalTransactionsToFirestore(transactions: Transaction[]) {
+export async function uploadAllTransactionsToFirestore(transactions: Transaction[]) {
   try {
+    // 1. Fetch current docs in collection to delete obsolete ones
+    const snap = await getDocs(collection(db, TRANSACTIONS_COL));
+    const currentCloudIds = new Set(snap.docs.map(d => d.id));
+    const newIds = new Set(transactions.map(t => t.id));
+
+    // Batch operations (max 500 per batch in firestore)
     const batch = writeBatch(db);
+    let opCount = 0;
+
+    // Delete obsolete
+    snap.docs.forEach((docSnap) => {
+      if (!newIds.has(docSnap.id)) {
+        batch.delete(docSnap.ref);
+        opCount++;
+      }
+    });
+
+    // Write / update
     transactions.forEach((tx) => {
       const docRef = doc(db, TRANSACTIONS_COL, tx.id);
       batch.set(docRef, tx, { merge: true });
+      opCount++;
     });
-    await batch.commit();
+
+    if (opCount > 0) {
+      await batch.commit();
+    }
     return true;
   } catch (err) {
-    console.error('Batch upload error:', err);
+    console.error('Error uploading transactions to Firestore:', err);
     return false;
   }
+}
+
+/**
+ * Pull all data fresh from Firestore
+ */
+export async function pullLatestFromFirestore(): Promise<{
+  transactions: Transaction[];
+  settings?: AppSettings;
+  chatMessages: ChatMessage[];
+}> {
+  const [txSnap, settingsSnap, chatSnap] = await Promise.all([
+    getDocs(collection(db, TRANSACTIONS_COL)),
+    getDocs(collection(db, SETTINGS_COL)),
+    getDocs(collection(db, CHAT_COL)),
+  ]);
+
+  const transactions: Transaction[] = [];
+  txSnap.forEach(d => transactions.push(d.data() as Transaction));
+  transactions.sort((a, b) => (b.date_from || '').localeCompare(a.date_from || ''));
+
+  let settings: AppSettings | undefined = undefined;
+  settingsSnap.forEach(d => {
+    if (d.id === 'global_config') {
+      settings = d.data() as AppSettings;
+    }
+  });
+
+  const chatMessages: ChatMessage[] = [];
+  chatSnap.forEach(d => chatMessages.push(d.data() as ChatMessage));
+  chatMessages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+
+  return { transactions, settings, chatMessages };
 }
