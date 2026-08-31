@@ -305,23 +305,18 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
     <div className="space-y-6">
       
       {/* Top Header Card: Title & Fiscal Period Selector */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-200/80 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
-              <Layers className="w-5 h-5" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+              <Store className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">
-                  店舗・月別 売上カードボード
-                </h1>
-                <span className="px-2 py-0.5 text-[10px] font-black bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                  カード入力方式
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 font-medium">
-                各店舗のカードを埋めると全社合計カードが自動生成され、12ヶ月の推移・比較が完了します
+              <h1 className="text-base font-bold text-slate-900">
+                店舗・月別 売上カード
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                各店舗のカードを入力すると全社合計が自動集計されます
               </p>
             </div>
           </div>

@@ -329,45 +329,37 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         </div>
       )}
 
-      {/* Header Banner */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl border border-indigo-900/40 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+      {/* Header Bar */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2.5 mb-2">
-              <span className="px-3 py-1 bg-rose-500/30 border border-rose-400/40 rounded-full text-xs font-black text-rose-300 flex items-center gap-1.5">
-                <Receipt className="w-3.5 h-3.5 text-rose-400" />
-                経費カード一括入力
-              </span>
-              <span className="text-xs text-slate-400 font-medium">5大グループ × 固定費・変動費</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-3">
-              <span>経費カードボード</span>
+            <h1 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-rose-600" />
+              <span>経費カード一括入力</span>
             </h1>
-            <p className="text-slate-300 text-sm mt-1 max-w-2xl leading-relaxed">
-              カード決済・月末振込・給与・家賃など、支払グループ別にカード化。金額を入れて「一括登録」するだけで帳簿へ自動反映されます。
+            <p className="text-xs text-slate-500 mt-0.5">
+              支払グループごとに金額を入力し、まとめて帳簿へ登録できます
             </p>
           </div>
 
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="px-4 py-2.5 bg-gradient-to-r from-rose-500 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all flex items-center gap-2 active:scale-95 self-start md:self-auto cursor-pointer"
+            className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            新しい経費カードを作成
+            <Plus className="w-3.5 h-3.5" />
+            <span>カードを追加</span>
           </button>
         </div>
 
         {/* Month Selector & Batch Register Bar */}
-        <div className="mt-6 pt-6 border-t border-slate-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-rose-400" />
-              対象月を選択:
+        <div className="pt-3 border-t border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              対象月:
             </span>
-            <div className="flex items-center gap-1 bg-slate-800/90 p-1 rounded-2xl border border-slate-700 overflow-x-auto max-w-full">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
               {currentPeriod.months.map((m) => {
                 const monthNum = parseInt(m.split('-')[1], 10);
                 const isSelected = activeMonth === m;
@@ -376,10 +368,10 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                     key={m}
                     type="button"
                     onClick={() => handleMonthChange(m)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                       isSelected
-                        ? 'bg-rose-500 text-white shadow-xs'
-                        : 'text-slate-300 hover:bg-slate-700/60'
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     {monthNum}月
@@ -388,26 +380,19 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               })}
             </div>
 
-            <div className="bg-indigo-900/40 border border-indigo-700/50 px-3.5 py-1.5 rounded-2xl flex items-center gap-2">
-              <span className="text-xs text-indigo-200 font-bold">入力合計:</span>
-              <span className="text-base font-black text-amber-300">¥{totalEnteredAmount.toLocaleString()}</span>
+            <div className="bg-rose-50 border border-rose-100 px-3 py-1 rounded-xl flex items-center gap-2 text-xs">
+              <span className="text-rose-700 font-medium">合計:</span>
+              <span className="font-bold font-mono text-rose-900 text-sm">¥{totalEnteredAmount.toLocaleString()}</span>
             </div>
-
-            {totalMonthExpense > 0 && (
-              <div className="bg-slate-800/80 border border-slate-700 px-3.5 py-1.5 rounded-2xl text-xs text-slate-300">
-                <span>{activeMonth}月 登録済総額: </span>
-                <span className="font-bold text-white">¥{totalMonthExpense.toLocaleString()}</span>
-              </div>
-            )}
           </div>
 
           <button
             type="button"
             onClick={handleBatchRegister}
             disabled={totalEnteredAmount <= 0}
-            className="w-full lg:w-auto px-6 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:pointer-events-none text-white font-black text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <CheckCircle2 className="w-5 h-5" />
+            <CheckCircle2 className="w-4 h-4" />
             <span>{activeMonth}月分を一括登録する</span>
           </button>
         </div>

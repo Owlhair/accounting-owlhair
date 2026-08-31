@@ -101,73 +101,74 @@ export const FinancialStatementView: React.FC<FinancialStatementViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-5 sm:p-6 rounded-3xl text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="p-1.5 bg-indigo-500/30 border border-indigo-400/30 rounded-xl text-indigo-300">
-              <Calculator className="w-4 h-4" />
-            </span>
-            <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
-              Real-time P/L & Tax Estimator
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-slate-900">
+                想定決算書 ＆ 税金シミュレーター
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                損益計算書(P/L)と法人税・消費税の見込みをリアルタイム集計します
+              </p>
+            </div>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
-            リアルタイム想定決算書 ＆ 税金シミュレーター
-          </h1>
-          <p className="text-xs text-indigo-200 mt-1">
-            入力データから現在の損益・法人税等・消費税を即座に自動計算し、期末着地と節税対策を見える化します。
-          </p>
         </div>
 
         {/* Period & Entity Controls */}
-        <div className="flex flex-wrap items-center gap-2 bg-white/10 p-1.5 rounded-2xl border border-white/10 self-stretch md:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-stretch md:self-auto">
           {/* Period Selector */}
-          <select
-            value={selectedFilter}
-            onChange={(e) => onSelectFilter(e.target.value)}
-            className="bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/20 focus:outline-none cursor-pointer"
-          >
-            {fiscalPeriods.map(p => (
-              <option key={p.key} value={p.key}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+            <Building2 className="w-3.5 h-3.5 text-indigo-600 ml-1" />
+            <select
+              value={selectedFilter}
+              onChange={(e) => onSelectFilter(e.target.value)}
+              className="bg-transparent text-xs font-bold pr-2 py-1 focus:outline-hidden cursor-pointer"
+            >
+              {fiscalPeriods.map(p => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Entity Type Toggle */}
-          <div className="flex bg-slate-800 p-0.5 rounded-xl border border-white/20 text-xs font-bold">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
             <button
               type="button"
               onClick={() => setParams(prev => ({ ...prev, entityType: 'corporate' }))}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1 rounded-lg transition-all ${
                 params.entityType === 'corporate'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-gray-300 hover:text-white'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              法人（中小企業）
+              法人
             </button>
             <button
               type="button"
               onClick={() => setParams(prev => ({ ...prev, entityType: 'individual' }))}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1 rounded-lg transition-all ${
                 params.entityType === 'individual'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-gray-300 hover:text-white'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              個人事業主
+              個人
             </button>
           </div>
 
           <button
             type="button"
             onClick={handlePrint}
-            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
+            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1"
             title="決算書を印刷・PDF出力"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">印刷</span>
+            <Printer className="w-4 h-4" />
           </button>
         </div>
       </div>

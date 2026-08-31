@@ -92,35 +92,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner / Filter & Action bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-50 text-indigo-700 rounded-xl">
-            <Building2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-900 flex items-center gap-2">
-              ダッシュボード
-              <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-full font-mono">
-                {filterLabel}
-              </span>
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {filterLabel}の収支・店舗別概要
-            </p>
-          </div>
-        </div>
-
-        {/* Period Selector, Fiscal Year Settings, and Quick Add */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Period Selector Dropdown */}
-          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700">
+          <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700">
             <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
             <select
               value={selectedFilter}
               onChange={(e) => onSelectFilter(e.target.value)}
               className="bg-transparent focus:outline-hidden cursor-pointer"
             >
-              <optgroup label="期ごとの集計（推奨）">
+              <optgroup label="期ごとの集計">
                 {fiscalPeriods.map(p => (
                   <option key={p.key} value={p.key}>
                     {p.label}
@@ -140,53 +121,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </select>
           </div>
 
-          {/* Settings Trigger */}
           <button
             type="button"
             onClick={onOpenFiscalSettings}
-            className="p-2 text-gray-600 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1"
+            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors text-xs"
             title="決算期・店舗設定"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">環境設定</span>
+            <SlidersHorizontal className="w-4 h-4" />
           </button>
+        </div>
 
-          <button
-            type="button"
-            onClick={() => onNavigateToTab('cards')}
-            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="店舗×月の売上カード入力"
-          >
-            <Store className="w-3.5 h-3.5 text-emerald-600" />
-            <span>売上カード</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateToTab('expenseCards')}
-            className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-            title="5大グループ・固定費/変動費の経費カード一括入力"
-          >
-            <Layers className="w-3.5 h-3.5 text-rose-600" />
-            <span>経費カード</span>
-          </button>
-
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             type="button"
             onClick={onOpenAddSales}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            className="flex-1 sm:flex-initial px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            個別売上
+            <Plus className="w-3.5 h-3.5" />
+            <span>売上を追加</span>
           </button>
 
           <button
             type="button"
             onClick={onOpenAddExpense}
-            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            className="flex-1 sm:flex-initial px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            個別経費
+            <Plus className="w-3.5 h-3.5" />
+            <span>経費を追加</span>
           </button>
         </div>
       </div>
@@ -278,72 +240,48 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Real-time Estimated Financial Statement & Tax Simulator Banner */}
-      <div 
-        onClick={() => onNavigateToTab('statement')}
-        className="cursor-pointer bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:from-slate-950 hover:to-indigo-900 text-white rounded-3xl p-5 sm:p-6 shadow-md transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-500/30 group"
-      >
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="p-3 bg-indigo-500/20 border border-indigo-400/30 rounded-2xl text-indigo-300 shrink-0 group-hover:scale-105 transition-transform">
-            <Calculator className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-base text-white flex items-center gap-1.5">
-                想定決算書 ＆ 税金シミュレーター (P/L)
-              </span>
-              <span className="text-[10px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                リアルタイム自動算出
-              </span>
+      {/* Fast Access Grid: Statement & Card Boards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Sales Card Board Link */}
+        <div 
+          onClick={() => onNavigateToTab('cards')}
+          className="cursor-pointer bg-white hover:bg-slate-50 text-slate-900 rounded-2xl p-4.5 border border-slate-200 shadow-xs transition-all flex items-center justify-between gap-3 group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+              <Store className="w-5 h-5" />
             </div>
-            <p className="text-xs text-indigo-200 mt-1 font-medium leading-relaxed">
-              現在入力済（{statement.elapsedMonths}ヶ月）の想定税引前利益は <span className="text-emerald-400 font-bold font-mono">{formatCurrency(statement.profitBeforeTax)}</span>、
-              想定法人税等は <span className="text-amber-300 font-bold font-mono">{formatCurrency(statement.taxEstimation.totalCorporateIncomeTaxes)}</span>（実効税率 {statement.taxEstimation.effectiveTaxRate}%）です。
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
-          <div className="hidden lg:block text-right pr-2">
-            <span className="text-[10px] text-gray-400 block font-bold">年間着地予想 利益</span>
-            <span className="text-xs font-black text-emerald-400 font-mono">
-              {formatCurrency(statement.fullYearProjection.projectedProfit)}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-xs transition-colors">
-            <span>決算書・節税策を見る</span>
-            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </div>
-      </div>
-
-      {/* Store Sales Cards Feature Banner */}
-      <div 
-        onClick={() => onNavigateToTab('cards')}
-        className="cursor-pointer bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-700 hover:from-emerald-700 hover:to-indigo-800 text-white rounded-2xl p-4 sm:p-5 shadow-xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-xs text-white shrink-0 group-hover:scale-105 transition-transform">
-            <Store className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-sm text-white">
-                店舗・月別 売上カードボード
-              </span>
-              <span className="text-[10px] font-black bg-white/25 px-2 py-0.5 rounded-full text-white">
-                おすすめ
-              </span>
+            <div>
+              <div className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                売上カードボード
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                店舗×決済種別（現金・カード等）ごとの月別売上管理
+              </p>
             </div>
-            <p className="text-xs text-emerald-100 mt-0.5 font-medium">
-              太宰府店などの各店舗カード（現金・クレジット・QR・振込）を埋めていくと、全社合計カードが自動完成！
-            </p>
           </div>
+          <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all shrink-0" />
         </div>
 
-        <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white text-emerald-900 rounded-xl text-xs font-black shadow-xs group-hover:bg-emerald-50 transition-colors shrink-0">
-          <span>カードボードを開く</span>
-          <ArrowRight className="w-3.5 h-3.5 text-emerald-700 group-hover:translate-x-0.5 transition-transform" />
+        {/* Financial Statement Link */}
+        <div 
+          onClick={() => onNavigateToTab('statement')}
+          className="cursor-pointer bg-white hover:bg-slate-50 text-slate-900 rounded-2xl p-4.5 border border-slate-200 shadow-xs transition-all flex items-center justify-between gap-3 group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                想定決算書 ＆ 税金シミュレーター
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                想定税引前利益: <span className="font-bold text-slate-700">{formatCurrency(statement.profitBeforeTax)}</span>
+              </p>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 group-hover:translate-x-0.5 transition-all shrink-0" />
         </div>
       </div>
 
