@@ -44,32 +44,78 @@ export const DEFAULT_STORES = [
 ];
 
 export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
-  // 1. カードで決済しているもの
+  // 1. カードで決済しているもの（カード内で様々な品目を決済）
   {
     id: 'ec-1',
-    title: '広告宣伝・Webサーバー・SaaS代',
-    category: '広告宣伝費',
+    title: 'ビジネスカード決済（明細内訳）',
     timingGroup: 'credit_card',
-    costType: 'variable',
-    defaultAmount: 45000,
     store: '全社共通',
-    memo: 'Google広告・SNS広告・Webツール（カード決済）',
+    paymentMethod: 'クレジットカード',
+    memo: '毎月カードで支払っている各種明細',
+    subItems: [
+      {
+        id: 'sub-1',
+        name: 'Google/SNS広告費',
+        category: '広告宣伝費',
+        costType: 'variable',
+        defaultAmount: 50000,
+        store: '全社共通',
+        memo: '集客用WEB広告（変動）',
+      },
+      {
+        id: 'sub-2',
+        name: 'WEBサーバー・SaaS月額ツール（Canva・Adobe等）',
+        category: '通信費',
+        costType: 'fixed',
+        defaultAmount: 18000,
+        store: '全社共通',
+        memo: 'クラウドツール定額利用料（固定）',
+      },
+      {
+        id: 'sub-3',
+        name: 'Amazon・備品消耗品カード買い出し',
+        category: '消耗品費',
+        costType: 'variable',
+        defaultAmount: 15000,
+        store: '全社共通',
+        memo: '店舗資材・日用品（変動）',
+      },
+    ],
   },
   // 2. 末にまとめて払うもの
   {
     id: 'ec-2',
-    title: '商品仕入・材料費（買掛金）',
-    category: '仕入',
+    title: '月末まとめて支払うもの（請求書払い）',
     timingGroup: 'month_end',
-    costType: 'variable',
-    defaultAmount: 280000,
     store: '全社共通',
-    memo: '末締め翌月末振込（仕入先請求書）',
+    paymentMethod: '銀行振込',
+    memo: '末締め翌月末の振込一覧',
+    subItems: [
+      {
+        id: 'sub-4',
+        name: 'メイン問屋 商品仕入（買掛金）',
+        category: '仕入',
+        costType: 'variable',
+        defaultAmount: 300000,
+        store: '全社共通',
+        memo: '請求書確認（変動）',
+      },
+      {
+        id: 'sub-5',
+        name: '外部委託・パートナー報酬',
+        category: '外注費',
+        costType: 'variable',
+        defaultAmount: 80000,
+        store: '全社共通',
+        memo: '制作・開発パートナー振込',
+      },
+    ],
   },
   // 3. 給与
   {
     id: 'ec-3',
-    title: 'スタッフ給与・役員報酬',
+    title: '役員報酬・スタッフ給料',
+    paymentMethod: '銀行振込',
     category: '給料手当',
     timingGroup: 'salary',
     costType: 'fixed',
@@ -80,7 +126,8 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
   // 4. 月始あたりに払うもの
   {
     id: 'ec-4',
-    title: '店舗家賃・テナント料',
+    title: '店舗・オフィス家賃',
+    paymentMethod: '口座振替',
     category: '地代家賃',
     timingGroup: 'month_start',
     costType: 'fixed',
@@ -91,13 +138,31 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
   // 5. その他
   {
     id: 'ec-5',
-    title: '水道光熱費・通信費',
-    category: '水道光熱費',
+    title: '公共料金・通信費（口座引落等）',
     timingGroup: 'other',
-    costType: 'variable',
-    defaultAmount: 35000,
     store: '全社共通',
-    memo: '電気・水道・ガス・ネット回線（口座引落）',
+    paymentMethod: '口座振替',
+    memo: '毎月の公共料金・ネット回線代',
+    subItems: [
+      {
+        id: 'sub-6',
+        name: '電気・水道・ガス代',
+        category: '水道光熱費',
+        costType: 'variable',
+        defaultAmount: 32000,
+        store: '全社共通',
+        memo: '月次使用料（変動）',
+      },
+      {
+        id: 'sub-7',
+        name: '店舗光回線・固定電話代',
+        category: '通信費',
+        costType: 'fixed',
+        defaultAmount: 8500,
+        store: '全社共通',
+        memo: 'ネット月額（固定）',
+      },
+    ],
   },
 ];
 

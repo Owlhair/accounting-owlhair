@@ -49,15 +49,27 @@ export type ExpenseCostType =
   | 'fixed'         // 毎月支払う金額が決まっているもの（固定費）
   | 'variable';     // 毎月変わるもの（変動費）
 
+export interface ExpenseCardSubItem {
+  id: string;
+  name: string;                  // 購入内容・品目名（例: Google広告、Canva、Adobe、AWSサーバー、事務消耗品など）
+  category: string;              // 勘定科目（例: 広告宣伝費、通信費、消耗品費など）
+  costType: ExpenseCostType;     // 固定費 or 変動費
+  defaultAmount?: number;        // 目安・固定金額
+  store?: string;                // 店舗
+  memo?: string;                 // メモ
+}
+
 export interface ExpenseCard {
   id: string;
-  title: string;                  // 項目名（例: Google広告・サーバー代、仕入れ代金、役員報酬、店舗家賃等）
-  category: string;               // 勘定科目（例: 広告宣伝費、仕入高、給料手当、地代家賃など）
+  title: string;                  // 枠名・カード名（例: ビジネスカード決済、月末買掛金支払、役員報酬、店舗家賃等）
   timingGroup: ExpenseTimingGroup;// 支払タイミンググループ
-  costType: ExpenseCostType;      // 固定額 or 変動額
-  defaultAmount?: number;         // 固定費の場合の基準金額（または前月目安）
+  category?: string;              // （単一アイテムの場合の勘定科目）
+  costType?: ExpenseCostType;     // （単一アイテムの場合の固定・変動）
+  defaultAmount?: number;         // （単一アイテムの場合の固定額）
   store?: string;                 // 店舗・拠点（全社共通、本店など）
   memo?: string;                  // メモ（例: 毎月27日引落、三井住友カード等）
+  paymentMethod?: string;         // 決済方法（クレジットカード、銀行振込、口座振替など）
+  subItems?: ExpenseCardSubItem[];// カード内で支払っている品目リスト（何を買ったか）
 }
 
 export interface AppSettings {

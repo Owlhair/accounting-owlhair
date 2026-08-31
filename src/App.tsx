@@ -450,11 +450,11 @@ export default function App() {
   };
 
   // Handler: Batch Register from Expense Cards
-  const handleRegisterExpenseBatch = (items: { card: ExpenseCard; amount: number; date: string; memo: string }[]) => {
+  const handleRegisterExpenseBatch = (items: { title: string; category: string; costType: 'fixed' | 'variable'; paymentMethod: string; store: string; amount: number; date: string; memo: string }[]) => {
     const timestamp = new Date().toISOString();
     const newItems: Transaction[] = items.map((item, idx) => {
       const monthStr = item.date.substring(0, 7);
-      const isMonthlyGranularity = item.card.costType === 'fixed' || item.card.timingGroup === 'month_end';
+      const isMonthlyGranularity = item.costType === 'fixed';
       const dateParts = item.date.split('-');
       const year = parseInt(dateParts[0], 10);
       const month = parseInt(dateParts[1], 10);
@@ -467,13 +467,13 @@ export default function App() {
         date_from: dateFrom,
         date_to: dateTo,
         type: 'expense' as const,
-        category: item.card.category,
-        store: item.card.store || '全社共通',
+        category: item.category,
+        store: item.store || '全社共通',
         amount: item.amount,
-        payment_method: item.card.timingGroup === 'credit_card' ? 'クレジットカード' : '銀行振込',
+        payment_method: item.paymentMethod || 'クレジットカード',
         granularity: isMonthlyGranularity ? 'monthly' as const : 'daily' as const,
-        description: `${item.card.title} (${item.card.category})`,
-        memo: item.memo || `${item.card.title} 一括計上`,
+        description: `${item.title} (${item.category})`,
+        memo: item.memo || `${item.title} 一括計上`,
         source_type: 'manual' as const,
         confirmed: true,
         created_at: timestamp,
