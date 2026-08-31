@@ -153,11 +153,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           <button
             type="button"
+            onClick={() => onNavigateToTab('cards')}
+            className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="店舗×月の売上カード入力"
+          >
+            <Store className="w-3.5 h-3.5 text-emerald-600" />
+            <span>売上カード</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateToTab('expenseCards')}
+            className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="5大グループ・固定費/変動費の経費カード一括入力"
+          >
+            <Layers className="w-3.5 h-3.5 text-rose-600" />
+            <span>経費カード</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onOpenAddSales}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            売上追加
+            個別売上
           </button>
 
           <button
@@ -166,7 +186,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
-            経費追加
+            個別経費
           </button>
         </div>
       </div>

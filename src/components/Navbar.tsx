@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { getActiveFileName } from '../utils/fileSystemSync';
 
-export type NavTab = 'dashboard' | 'cards' | 'list' | 'scratch' | 'monthly' | 'statement';
+export type NavTab = 'dashboard' | 'cards' | 'expenseCards' | 'list' | 'scratch' | 'monthly' | 'statement';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -111,7 +111,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Store className="w-3.5 h-3.5 text-emerald-600" />
-              売上カード (店舗×月)
+              売上カード
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTabChange('expenseCards')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                currentTab === 'expenseCards'
+                  ? 'bg-white text-rose-900 shadow-xs ring-1 ring-rose-200'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-rose-600" />
+              経費カード
             </button>
 
             <button
@@ -277,6 +290,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             className={`py-1 px-2 rounded-lg shrink-0 flex items-center gap-1 ${currentTab === 'cards' ? 'text-emerald-700 font-extrabold' : 'text-gray-500'}`}
           >
             売上カード
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('expenseCards')}
+            className={`py-1 px-2 rounded-lg shrink-0 flex items-center gap-1 ${currentTab === 'expenseCards' ? 'text-rose-600 font-extrabold' : 'text-gray-500'}`}
+          >
+            経費カード
           </button>
           <button
             type="button"

@@ -38,11 +38,34 @@ export interface FiscalSettings {
   fiscalYearStartYear: number; // 設立年 / 第1期開始年 (例: 2024)
 }
 
+export type ExpenseTimingGroup = 
+  | 'credit_card'   // 1. カードで決済しているもの
+  | 'month_end'     // 2. 末にまとめて払うもの
+  | 'salary'        // 3. 給与
+  | 'month_start'   // 4. 月始あたりに払うもの
+  | 'other';        // 5. その他
+
+export type ExpenseCostType = 
+  | 'fixed'         // 毎月支払う金額が決まっているもの（固定費）
+  | 'variable';     // 毎月変わるもの（変動費）
+
+export interface ExpenseCard {
+  id: string;
+  title: string;                  // 項目名（例: Google広告・サーバー代、仕入れ代金、役員報酬、店舗家賃等）
+  category: string;               // 勘定科目（例: 広告宣伝費、仕入高、給料手当、地代家賃など）
+  timingGroup: ExpenseTimingGroup;// 支払タイミンググループ
+  costType: ExpenseCostType;      // 固定額 or 変動額
+  defaultAmount?: number;         // 固定費の場合の基準金額（または前月目安）
+  store?: string;                 // 店舗・拠点（全社共通、本店など）
+  memo?: string;                  // メモ（例: 毎月27日引落、三井住友カード等）
+}
+
 export interface AppSettings {
   salesCategories: string[];
   expenseCategories: string[];
   paymentMethods: string[];
   stores: string[]; // 店舗リスト (例: ['全社共通', '本店', '2号店'])
+  expenseCards?: ExpenseCard[]; // 経費カード一覧設定
   fiscalSettings: FiscalSettings;
 }
 

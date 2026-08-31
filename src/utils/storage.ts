@@ -1,4 +1,4 @@
-import { Transaction, AppSettings } from '../types';
+import { Transaction, AppSettings, ExpenseCard } from '../types';
 
 const STORAGE_KEY_TRANSACTIONS = 'scratch_keiri_transactions_v1';
 const STORAGE_KEY_SETTINGS = 'scratch_keiri_settings_v1';
@@ -17,6 +17,8 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
   '旅費交通費',
   '広告宣伝費',
   '地代家賃',
+  '役員報酬',
+  '給料手当',
   '外注費',
   '車両費',
   '租税公課',
@@ -39,6 +41,64 @@ export const DEFAULT_STORES = [
   '本店',
   '2号店',
   '全社共通',
+];
+
+export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
+  // 1. カードで決済しているもの
+  {
+    id: 'ec-1',
+    title: '広告宣伝・Webサーバー・SaaS代',
+    category: '広告宣伝費',
+    timingGroup: 'credit_card',
+    costType: 'variable',
+    defaultAmount: 45000,
+    store: '全社共通',
+    memo: 'Google広告・SNS広告・Webツール（カード決済）',
+  },
+  // 2. 末にまとめて払うもの
+  {
+    id: 'ec-2',
+    title: '商品仕入・材料費（買掛金）',
+    category: '仕入',
+    timingGroup: 'month_end',
+    costType: 'variable',
+    defaultAmount: 280000,
+    store: '全社共通',
+    memo: '末締め翌月末振込（仕入先請求書）',
+  },
+  // 3. 給与
+  {
+    id: 'ec-3',
+    title: 'スタッフ給与・役員報酬',
+    category: '給料手当',
+    timingGroup: 'salary',
+    costType: 'fixed',
+    defaultAmount: 500000,
+    store: '全社共通',
+    memo: '毎月25日振込',
+  },
+  // 4. 月始あたりに払うもの
+  {
+    id: 'ec-4',
+    title: '店舗家賃・テナント料',
+    category: '地代家賃',
+    timingGroup: 'month_start',
+    costType: 'fixed',
+    defaultAmount: 180000,
+    store: '全社共通',
+    memo: '翌月分前家賃（口座振替・月末/1日引落）',
+  },
+  // 5. その他
+  {
+    id: 'ec-5',
+    title: '水道光熱費・通信費',
+    category: '水道光熱費',
+    timingGroup: 'other',
+    costType: 'variable',
+    defaultAmount: 35000,
+    store: '全社共通',
+    memo: '電気・水道・ガス・ネット回線（口座引落）',
+  },
 ];
 
 export const DEFAULT_FISCAL_SETTINGS = {
@@ -255,6 +315,7 @@ export const loadSettings = (): AppSettings => {
       expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods,
       stores,
+      expenseCards: parsed.expenseCards && parsed.expenseCards.length > 0 ? parsed.expenseCards : DEFAULT_EXPENSE_CARDS,
       fiscalSettings: {
         fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
         fiscalYearStartYear: parsed.fiscalSettings?.fiscalYearStartYear ?? DEFAULT_FISCAL_SETTINGS.fiscalYearStartYear,
@@ -267,6 +328,7 @@ export const loadSettings = (): AppSettings => {
       expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods: DEFAULT_PAYMENT_METHODS,
       stores: DEFAULT_STORES,
+      expenseCards: DEFAULT_EXPENSE_CARDS,
       fiscalSettings: DEFAULT_FISCAL_SETTINGS,
     };
   }

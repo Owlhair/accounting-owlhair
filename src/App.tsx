@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, AppSettings, ChatMessage, TeamMember, TransactionRef, FiscalSettings } from './types';
+import { Transaction, AppSettings, ChatMessage, TeamMember, TransactionRef, FiscalSettings, ExpenseCard } from './types';
 import { 
   loadTransactions, 
   saveTransactions, 
@@ -41,6 +41,7 @@ import { TransactionList } from './components/TransactionList';
 import { ScratchFlowView } from './components/ScratchFlowView';
 import { MonthlyAggregationView } from './components/MonthlyAggregationView';
 import { StoreSalesCardBoard } from './components/StoreSalesCardBoard';
+import { ExpenseCardsView } from './components/ExpenseCardsView';
 import { FinancialStatementView } from './components/FinancialStatementView';
 import { AddSalesModal } from './components/AddSalesModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
@@ -437,6 +438,63 @@ export default function App() {
     });
   };
 
+  // Handler: Save Expense Cards configuration
+  const handleSaveExpenseCards = (cards: ExpenseCard[]) => {
+    const updated: AppSettings = {
+      ...settings,
+      expenseCards: cards,
+    };
+    setSettings(updated);
+    saveSettings(updated);
+    syncSaveSettingsToFirestore(updated);
+  };
+
+  // Handler: Batch Register from Expense Cards
+  const handleRegisterExpenseBatch = (items: { card: ExpenseCard; amount: number; date: string; memo: string }[]) => {
+    const timestamp = new Date().toISOString();
+    const newItems: Transaction[] = items.map((item, idx) => {
+      const monthStr = item.date.substring(0, 7);
+      const isMonthlyGranularity = item.card.costType === 'fixed' || item.card.timingGroup === 'month_end';
+      const dateParts = item.date.split('-');
+      const year = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10);
+      const lastDay = new Date(year, month, 0).getDate();
+      const dateFrom = isMonthlyGranularity ? `${monthStr}-01` : item.date;
+      const dateTo = isMonthlyGranularity ? `${monthStr}-${String(lastDay).padStart(2, '0')}` : item.date;
+
+      return {
+        id: `tx-expcard-${Date.now()}-${idx}`,
+        date_from: dateFrom,
+        date_to: dateTo,
+        type: 'expense' as const,
+        category: item.card.category,
+        store: item.card.store || '全社共通',
+        amount: item.amount,
+        payment_method: item.card.timingGroup === 'credit_card' ? 'クレジットカード' : '銀行振込',
+        granularity: isMonthlyGranularity ? 'monthly' as const : 'daily' as const,
+        description: `${item.card.title} (${item.card.category})`,
+        memo: item.memo || `${item.card.title} 一括計上`,
+        source_type: 'manual' as const,
+        confirmed: true,
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+    });
+
+    setTransactions((prev) => {
+      const updated = [...newItems, ...prev];
+      saveTransactions(updated);
+      return updated;
+    });
+
+    newItems.forEach((tx) => syncSaveTransactionToFirestore(tx));
+
+    const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
+    handleSendMessage(
+      `📋 【経費一括計上】${items[0].date.substring(0, 7)}月分として ${items.length} 件（合計 ¥${totalAmount.toLocaleString()}）の経費カード取引を計上・反映しました。`
+    );
+  };
+
   // Handler: Save Settings (Fiscal & Stores)
   const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[]) => {
     const isFiscalChanged =
@@ -626,6 +684,18 @@ export default function App() {
             onSelectFilter={setSelectedFilter}
             onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
             onSaveStoreCard={handleSaveStoreCard}
+          />
+        )}
+
+        {currentTab === 'expenseCards' && (
+          <ExpenseCardsView
+            settings={settings}
+            transactions={transactions}
+            fiscalPeriods={fiscalPeriods}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            onRegisterExpenseBatch={handleRegisterExpenseBatch}
+            onSaveExpenseCards={handleSaveExpenseCards}
           />
         )}
 
