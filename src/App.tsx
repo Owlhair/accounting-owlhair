@@ -496,7 +496,7 @@ export default function App() {
   };
 
   // Handler: Save Settings (Fiscal & Stores)
-  const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[]) => {
+  const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[], newClosedStores: string[] = []) => {
     const isFiscalChanged =
       newFiscalSettings.fiscalYearEndMonth !== settings.fiscalSettings.fiscalYearEndMonth ||
       newFiscalSettings.fiscalYearStartYear !== settings.fiscalSettings.fiscalYearStartYear;
@@ -505,6 +505,7 @@ export default function App() {
       ...settings,
       fiscalSettings: newFiscalSettings,
       stores: newStores,
+      closedStores: newClosedStores,
     };
 
     setSettings(updatedSettings);
@@ -825,6 +826,7 @@ export default function App() {
         onClose={() => setIsFiscalSettingsOpen(false)}
         fiscalSettings={settings.fiscalSettings}
         stores={settings.stores}
+        closedStores={settings.closedStores}
         onSaveSettings={handleSaveSettings}
         onOpenBackup={() => setIsBackupOpen(true)}
       />

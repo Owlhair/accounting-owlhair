@@ -125,13 +125,23 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
   // Modal State for editing a store card
   const [modalStore, setModalStore] = useState<string | null>(null);
 
-  // List of stores
+  // List of stores & closed stores filter
   const storeList = settings.stores && settings.stores.length > 0 ? settings.stores : ['太宰府店', '本店', '2号店', '全社共通'];
+  const closedStores = settings.closedStores || [];
+  const hasClosedStores = storeList.some(s => closedStores.includes(s));
+  const [showClosedStores, setShowClosedStores] = useState<boolean>(false);
+
+  // Filter stores based on open/closed toggle
+  const visibleStoreList = useMemo(() => {
+    return storeList.filter(s => showClosedStores || !closedStores.includes(s));
+  }, [storeList, closedStores, showClosedStores]);
+
   const paymentMethodsList = settings.paymentMethods || ['現金', 'クレジットカード', 'QR決済', '銀行振込', 'ポイント', 'その他'];
 
   // Calculate store card data for the active month
   const currentMonthCards = useMemo(() => {
-    const cards = storeList.map(storeName => {
+    const cards = visibleStoreList.map(storeName => {
+      const isStoreClosed = closedStores.includes(storeName);
       // Find sales transactions matching this store & month
       const storeTx = transactions.filter(t => {
         const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
@@ -166,6 +176,7 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
 
       return {
         store: storeName,
+        isClosed: isStoreClosed,
         month: activeMonth,
         breakdown,
         total,
@@ -221,7 +232,7 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
       filledCount,
       totalStores,
     };
-  }, [transactions, storeList, activeMonth]);
+  }, [transactions, visibleStoreList, activeMonth]);
 
   // Calculate 12-Month Matrix Data for current period
   const matrixData = useMemo(() => {
@@ -232,7 +243,8 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
       monthTotals[m] = 0;
     });
 
-    const rows = storeList.map(storeName => {
+    const rows = visibleStoreList.map(storeName => {
+      const isStoreClosed = closedStores.includes(storeName);
       const monthAmounts: Record<string, { total: number; isFilled: boolean; cash: number; cashless: number }> = {};
       let storeAnnualTotal = 0;
 
@@ -264,6 +276,7 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
 
       return {
         store: storeName,
+        isClosed: isStoreClosed,
         monthAmounts,
         annualTotal: storeAnnualTotal,
       };
@@ -276,7 +289,7 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
       monthTotals,
       grandTotal,
     };
-  }, [transactions, storeList, currentPeriod]);
+  }, [transactions, visibleStoreList, closedStores, currentPeriod]);
 
   // Helper for formatted month label (e.g. "2025年 5月")
   const formatMonthText = (mStr: string) => {
@@ -477,8 +490,23 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
               </p>
             </div>
 
-            {/* Quick Fill Unfilled Card Button */}
-            <div className="flex items-center gap-2">
+            {/* Quick Fill Unfilled Card Button & Closed Stores Toggle */}
+            <div className="flex flex-wrap items-center gap-2">
+              {hasClosedStores && (
+                <button
+                  type="button"
+                  onClick={() => setShowClosedStores(!showClosedStores)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    showClosedStores
+                      ? 'bg-slate-800 text-white border-slate-700'
+                      : 'bg-emerald-950/40 text-emerald-200 border-emerald-700/50 hover:bg-emerald-900/60'
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>{showClosedStores ? '閉店店舗を隠す' : `閉店店舗を表示 (${closedStores.length})`}</span>
+                </button>
+              )}
+
               {currentMonthCards.cards.find(c => !c.isFilled) ? (
                 <button
                   type="button"
@@ -486,7 +514,7 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
                     const firstEmpty = currentMonthCards.cards.find(c => !c.isFilled);
                     if (firstEmpty) setModalStore(firstEmpty.store);
                   }}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-black rounded-xl shadow-md transition-transform active:scale-95 flex items-center gap-1.5"
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-black rounded-xl shadow-md transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4 text-emerald-900" />
                   <span>未入力カードを埋める ({currentMonthCards.cards.find(c => !c.isFilled)?.store})</span>
@@ -588,7 +616,9 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
                 <div
                   key={card.store}
                   className={`rounded-3xl p-5 border transition-all flex flex-col justify-between ${
-                    card.isFilled
+                    card.isClosed
+                      ? 'bg-slate-50/80 border-slate-200 opacity-80 hover:opacity-100 shadow-2xs'
+                      : card.isFilled
                       ? 'bg-white border-gray-200 shadow-xs hover:shadow-md'
                       : 'bg-amber-50/20 border-dashed border-2 border-amber-300 hover:border-amber-400 hover:bg-amber-50/40 shadow-2xs'
                   }`}
@@ -598,14 +628,25 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
                     <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-2">
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-2xs ${
-                          card.isFilled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                          card.isClosed
+                            ? 'bg-gray-200 text-gray-500'
+                            : card.isFilled
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-gray-100 text-gray-500'
                         }`}>
                           <Store className="w-4 h-4" />
                         </div>
                         <div>
-                          <h3 className="text-sm font-black text-gray-900">
-                            {card.store}
-                          </h3>
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-black text-gray-900">
+                              {card.store}
+                            </h3>
+                            {card.isClosed && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600">
+                                閉店中
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-gray-400 font-bold font-mono">
                             {formatMonthText(activeMonth)}
                           </span>
@@ -751,6 +792,11 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
                     <td className="py-3 px-3 font-bold text-gray-900 sticky left-0 bg-white shadow-2xs z-10 flex items-center gap-1.5">
                       <Store className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{row.store}</span>
+                      {row.isClosed && (
+                        <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-gray-200 text-gray-600 ml-1">
+                          閉店
+                        </span>
+                      )}
                     </td>
                     {currentPeriod.months.map(m => {
                       const data = row.monthAmounts[m];

@@ -375,11 +375,14 @@ export const loadSettings = (): AppSettings => {
       stores = ['太宰府店', ...stores];
     }
 
+    const closedStores: string[] = Array.isArray(parsed.closedStores) ? parsed.closedStores : [];
+
     return {
       salesCategories: parsed.salesCategories || DEFAULT_SALES_CATEGORIES,
       expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods,
       stores,
+      closedStores,
       expenseCards: parsed.expenseCards && parsed.expenseCards.length > 0 ? parsed.expenseCards : DEFAULT_EXPENSE_CARDS,
       fiscalSettings: {
         fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
@@ -393,6 +396,7 @@ export const loadSettings = (): AppSettings => {
       expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods: DEFAULT_PAYMENT_METHODS,
       stores: DEFAULT_STORES,
+      closedStores: [],
       expenseCards: DEFAULT_EXPENSE_CARDS,
       fiscalSettings: DEFAULT_FISCAL_SETTINGS,
     };

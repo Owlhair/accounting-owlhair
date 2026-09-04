@@ -72,11 +72,18 @@ export interface ExpenseCard {
   subItems?: ExpenseCardSubItem[];// カード内で支払っている品目リスト（何を買ったか）
 }
 
+export interface StoreStatusInfo {
+  name: string;
+  isOpen: boolean; // 開店中(true) / 閉店(false)
+  memo?: string;
+}
+
 export interface AppSettings {
   salesCategories: string[];
   expenseCategories: string[];
   paymentMethods: string[];
   stores: string[]; // 店舗リスト (例: ['全社共通', '本店', '2号店'])
+  closedStores?: string[]; // 閉店・休業中の店舗リスト (オンオフのオフ)
   expenseCards?: ExpenseCard[]; // 経費カード一覧設定
   fiscalSettings: FiscalSettings;
 }

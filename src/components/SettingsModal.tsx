@@ -7,7 +7,8 @@ interface SettingsModalProps {
   onClose: () => void;
   fiscalSettings: FiscalSettings;
   stores: string[];
-  onSaveSettings: (newSettings: FiscalSettings, newStores: string[]) => void;
+  closedStores?: string[];
+  onSaveSettings: (newSettings: FiscalSettings, newStores: string[], newClosedStores: string[]) => void;
   onOpenBackup?: () => void;
 }
 
@@ -16,12 +17,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   fiscalSettings,
   stores,
+  closedStores = [],
   onSaveSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<'fiscal' | 'stores'>('fiscal');
   const [endMonth, setEndMonth] = useState<number>(fiscalSettings?.fiscalYearEndMonth || 3);
   const [startYear, setStartYear] = useState<number>(fiscalSettings?.fiscalYearStartYear || 2024);
   const [storeList, setStoreList] = useState<string[]>(stores && stores.length > 0 ? stores : ['本店', '2号店', '全社共通']);
+  const [closedStoreList, setClosedStoreList] = useState<string[]>(closedStores || []);
   const [newStoreInput, setNewStoreInput] = useState('');
 
   if (!isOpen) return null;
@@ -37,12 +40,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const handleToggleStoreStatus = (name: string) => {
+    if (closedStoreList.includes(name)) {
+      // 閉店 -> 開店 (ON)
+      setClosedStoreList(closedStoreList.filter(s => s !== name));
+    } else {
+      // 開店 -> 閉店 (OFF)
+      setClosedStoreList([...closedStoreList, name]);
+    }
+  };
+
   const handleRemoveStore = (name: string) => {
     if (storeList.length <= 1) {
       alert('最低1つの店舗・部門が必要です。');
       return;
     }
     setStoreList(storeList.filter(s => s !== name));
+    setClosedStoreList(closedStoreList.filter(s => s !== name));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -52,7 +66,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         fiscalYearEndMonth: Number(endMonth),
         fiscalYearStartYear: Number(startYear),
       },
-      storeList
+      storeList,
+      closedStoreList
     );
     onClose();
   };
@@ -164,6 +179,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <>
                 {/* Store Management Section */}
                 <div className="space-y-3">
+                  <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-[11px] text-indigo-900 leading-relaxed">
+                    💡 <strong>開店・閉店オンオフ機能:</strong> 店舗の「開店（営業中）」と「閉店（休業）」をスイッチで切り替えられます。閉店にした店舗は、売上カードや経費入力画面で非表示・整理できます。
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
@@ -181,33 +200,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={handleAddStore}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1 shrink-0"
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       追加
                     </button>
                   </div>
 
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {storeList.map((st) => (
-                      <div 
-                        key={st}
-                        className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
-                      >
-                        <div className="flex items-center gap-2 font-bold text-gray-800">
-                          <Store className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>{st}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveStore(st)}
-                          className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="削除"
+                  <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                    {storeList.map((st) => {
+                      const isClosed = closedStoreList.includes(st);
+                      return (
+                        <div 
+                          key={st}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
+                            isClosed
+                              ? 'bg-gray-100/80 border-gray-200 text-gray-500'
+                              : 'bg-white border-gray-200 text-gray-900 shadow-xs'
+                          }`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${isClosed ? 'bg-gray-400' : 'bg-emerald-500 shadow-xs ring-2 ring-emerald-100'}`} />
+                            <Store className={`w-3.5 h-3.5 shrink-0 ${isClosed ? 'text-gray-400' : 'text-indigo-600'}`} />
+                            <span className={`font-bold truncate ${isClosed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                              {st}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Open / Closed Toggle Switch Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStoreStatus(st)}
+                              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer border ${
+                                !isClosed
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-gray-200/80 text-gray-600 border-gray-300 hover:bg-gray-300/80'
+                              }`}
+                              title={isClosed ? 'クリックして開店（営業中）にする' : 'クリックして閉店（休業）にする'}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${!isClosed ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                              <span>{isClosed ? '閉店中' : '開店中 (ON)'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveStore(st)}
+                              className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="店舗を削除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </>
