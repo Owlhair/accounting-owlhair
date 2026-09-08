@@ -340,6 +340,18 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
     saveEmployees(updated);
   };
 
+  // Helper: update dependents count (扶養親族数の安全な更新)
+  const handleUpdateDependentsCount = (empId: string, count: number) => {
+    const safeCount = Math.max(0, Math.min(15, isNaN(count) ? 0 : count));
+    const updated = employees.map(emp => {
+      if (emp.id === empId) {
+        return { ...emp, dependentsCount: safeCount };
+      }
+      return emp;
+    });
+    saveEmployees(updated);
+  };
+
   // Helper: duplicate employee
   const handleDuplicateEmployee = (emp: SalaryEmployee) => {
     const newEmp: SalaryEmployee = {
@@ -898,11 +910,11 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
             <button
               type="button"
               onClick={() => onSyncToMonthEndExpenseCard(summary, activeMonth)}
-              className="px-3.5 py-2.5 text-xs font-bold text-slate-200 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-              title="経費カードの「2. 末にまとめて払うもの」に社会保険料（本人＋会社負担分）の品目を自動反映します"
+              className="px-3.5 py-2.5 text-xs font-bold text-white bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/40 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              title="給与画面で出来上がった「役員報酬・給料手当（3. 給与カード）」および「社会保険料・税金納付（2. 末払いカード）」を経費カードに自動反映します"
             >
-              <Layers className="w-4 h-4 text-rose-300" />
-              <span>経費カードの「末払い」へ同期</span>
+              <CreditCard className="w-4 h-4 text-indigo-200" />
+              <span>給与カードを経費カードへ反映</span>
             </button>
           )}
 
@@ -1199,32 +1211,52 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
                     {/* 扶養人数と住民税入力 */}
                     <div className="flex items-center justify-between gap-3 mt-2 text-xs">
-                      <div className="flex items-center gap-1 text-gray-600">
-                        <span>扶養親族:</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="10"
-                          value={emp.dependentsCount || 0}
-                          onChange={(e) => {
-                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                            const updated = employees.map(item => item.id === emp.id ? { ...item, dependentsCount: val } : item);
-                            onSaveSalaryEmployees(updated);
-                          }}
-                          className="w-12 text-center text-xs font-bold bg-white border border-gray-200 rounded px-1 py-0.5"
-                        />
-                        <span className="text-[11px] text-gray-400">名</span>
+                      <div className="flex items-center gap-1.5 text-gray-700">
+                        <span className="font-medium">扶養親族:</span>
+                        <div className="inline-flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateDependentsCount(emp.id, (emp.dependentsCount || 0) - 1)}
+                            disabled={(emp.dependentsCount || 0) <= 0}
+                            className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-25 disabled:pointer-events-none text-gray-700 font-bold transition-colors cursor-pointer text-xs"
+                            title="扶養人数を減らす"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            max="15"
+                            value={emp.dependentsCount ?? 0}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const parsed = parseInt(e.target.value, 10);
+                              handleUpdateDependentsCount(emp.id, isNaN(parsed) ? 0 : parsed);
+                            }}
+                            className="w-9 text-center text-xs font-black bg-transparent focus:outline-hidden py-0.5"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateDependentsCount(emp.id, (emp.dependentsCount || 0) + 1)}
+                            className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold transition-colors cursor-pointer text-xs"
+                            title="扶養人数を増やす"
+                          >
+                            ＋
+                          </button>
+                        </div>
+                        <span className="text-[11px] text-gray-500 font-medium">名</span>
                       </div>
 
                       <div className="flex items-center gap-1 text-gray-600">
-                        <span>住民税:</span>
+                        <span className="font-medium">住民税:</span>
                         <span className="text-gray-400">¥</span>
                         <input
                           type="number"
                           step="100"
                           value={emp.residentTax || 0}
+                          onFocus={(e) => e.target.select()}
                           onChange={(e) => handleUpdateResidentTax(emp.id, Number(e.target.value))}
-                          className="w-20 text-right text-xs font-bold font-mono bg-white border border-gray-200 rounded px-1.5 py-0.5"
+                          className="w-20 text-right text-xs font-bold font-mono bg-white border border-gray-200 rounded px-1.5 py-0.5 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
                         />
                       </div>
                     </div>
@@ -1304,6 +1336,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                 <th className="p-3 text-right">基本給</th>
                 <th className="p-3 text-right">手当計</th>
                 <th className="p-3 text-right">総支給額</th>
+                <th className="p-3 text-center">扶養親族</th>
                 <th className="p-3 text-center">社保</th>
                 <th className="p-3 text-center">雇保</th>
                 <th className="p-3 text-right">控除合計</th>
@@ -1330,6 +1363,30 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                   <td className="p-3 text-right font-mono font-bold">¥{r.totalBase.toLocaleString()}</td>
                   <td className="p-3 text-right font-mono">¥{r.totalAllowances.toLocaleString()}</td>
                   <td className="p-3 text-right font-mono font-bold text-gray-900">¥{r.grossSalary.toLocaleString()}</td>
+                  <td className="p-3 text-center">
+                    <div className="inline-flex items-center bg-gray-50 border border-gray-200 rounded-md overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateDependentsCount(r.employee.id, (r.employee.dependentsCount || 0) - 1)}
+                        disabled={(r.employee.dependentsCount || 0) <= 0}
+                        className="px-1.5 py-0.5 text-[10px] bg-white hover:bg-gray-100 disabled:opacity-20 text-gray-700 font-bold"
+                        title="減らす"
+                      >
+                        −
+                      </button>
+                      <span className="w-5 text-center font-mono font-black text-xs text-gray-800">
+                        {r.employee.dependentsCount || 0}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateDependentsCount(r.employee.id, (r.employee.dependentsCount || 0) + 1)}
+                        className="px-1.5 py-0.5 text-[10px] bg-white hover:bg-gray-100 text-gray-700 font-bold"
+                        title="増やす"
+                      >
+                        ＋
+                      </button>
+                    </div>
+                  </td>
                   <td className="p-3 text-center">
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                       r.employee.hasSocialInsurance ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-400'

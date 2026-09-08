@@ -55,6 +55,7 @@ interface ExpenseCardsViewProps {
   onRegisterExpenseBatch: (items: BatchExpenseItem[]) => void;
   onSaveExpenseCards: (cards: ExpenseCard[]) => void;
   onNavigateToSalary?: () => void;
+  onSyncSalaryToExpenseCards?: (targetMonth: string) => void;
 }
 
 export const TIMING_GROUP_CONFIG: Record<
@@ -131,6 +132,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   onRegisterExpenseBatch,
   onSaveExpenseCards,
   onNavigateToSalary,
+  onSyncSalaryToExpenseCards,
 }) => {
   const expenseCards = settings.expenseCards || [];
   const closedStores = settings.closedStores || [];
@@ -871,6 +873,19 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             <Copy className="w-3.5 h-3.5 text-indigo-600" />
             <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) の金額をコピー</span>
           </button>
+
+          {/* SYNC SALARY BUTTON: 給与台帳の出来上がりカードを経費カードへ反映 */}
+          {onSyncSalaryToExpenseCards && (
+            <button
+              type="button"
+              onClick={() => onSyncSalaryToExpenseCards(activeMonth)}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+              title="給与計算で出来上がった「役員報酬・給料手当」および「社会保険料・税金納付」のカードを反映・同期します"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span>給与台帳からカードを反映</span>
+            </button>
+          )}
         </div>
 
         {/* Subtotal & Batch Submit */}
@@ -932,32 +947,45 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
       {/* Salary & Month-End Sync Banner */}
       {onNavigateToSalary && (
-        <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-4 rounded-3xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/20 text-emerald-300 rounded-2xl border border-emerald-400/20">
-              <Users className="w-5 h-5" />
+        <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white p-4 sm:p-5 rounded-3xl shadow-sm border border-emerald-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 bg-emerald-500/20 text-emerald-300 rounded-2xl border border-emerald-400/30 shrink-0">
+              <Users className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider text-emerald-300">給与・社保自動連携</span>
-                <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 text-[10px] font-bold rounded-full">新機能</span>
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-300">給与・役員報酬カード連携</span>
+                <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 text-[10px] font-bold rounded-full">自動連携</span>
               </div>
-              <p className="text-sm font-bold text-white mt-0.5">
-                役員報酬・給料手当の社保・所得税自動控除 ＆ 会社負担分の【末の支払い】自動連動
+              <p className="text-sm font-bold text-white mt-1">
+                出来上がった「役員報酬・給料手当」および月末の「社保・税金納付」を経費カードに反映
               </p>
               <p className="text-xs text-emerald-200/80 mt-0.5">
-                給与画面で計算した社会保険料・税金は、経費カード「2. 末にまとめて払うもの」へワンクリックで自動同期できます。
+                給与台帳で計算された結果を「3. 給与」および「2. 末にまとめて払うもの」カードへワンクリックで最新反映・一括計上できます。
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onNavigateToSalary}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
-          >
-            <Calculator className="w-4 h-4" />
-            <span>給与・報酬台帳を開く</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onSyncSalaryToExpenseCards && (
+              <button
+                type="button"
+                onClick={() => onSyncSalaryToExpenseCards(activeMonth)}
+                className="px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                title="給与台帳で計算した最新データを経費カードへ反映します"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>給与台帳からカードを反映</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onNavigateToSalary}
+              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+            >
+              <Calculator className="w-4 h-4" />
+              <span>給与・報酬台帳を開く</span>
+            </button>
+          </div>
         </div>
       )}
 
