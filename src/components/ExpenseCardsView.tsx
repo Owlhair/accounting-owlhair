@@ -12,6 +12,7 @@ import {
   DollarSign,
   Layers,
   Sparkles,
+  Calculator,
   Tag,
   Store,
   Receipt,
@@ -53,6 +54,7 @@ interface ExpenseCardsViewProps {
   onSelectFilter: (filterId: string) => void;
   onRegisterExpenseBatch: (items: BatchExpenseItem[]) => void;
   onSaveExpenseCards: (cards: ExpenseCard[]) => void;
+  onNavigateToSalary?: () => void;
 }
 
 export const TIMING_GROUP_CONFIG: Record<
@@ -128,6 +130,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   onSelectFilter,
   onRegisterExpenseBatch,
   onSaveExpenseCards,
+  onNavigateToSalary,
 }) => {
   const expenseCards = settings.expenseCards || [];
   const closedStores = settings.closedStores || [];
@@ -854,6 +857,37 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         })}
       </div>
 
+      {/* Salary & Month-End Sync Banner */}
+      {onNavigateToSalary && (
+        <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-4 rounded-3xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-500/20 text-emerald-300 rounded-2xl border border-emerald-400/20">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-emerald-300">給与・社保自動連携</span>
+                <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 text-[10px] font-bold rounded-full">新機能</span>
+              </div>
+              <p className="text-sm font-bold text-white mt-0.5">
+                役員報酬・給料手当の社保・所得税自動控除 ＆ 会社負担分の【末の支払い】自動連動
+              </p>
+              <p className="text-xs text-emerald-200/80 mt-0.5">
+                給与画面で計算した社会保険料・税金は、経費カード「2. 末にまとめて払うもの」へワンクリックで自動同期できます。
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onNavigateToSalary}
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+          >
+            <Calculator className="w-4 h-4" />
+            <span>給与・報酬台帳を開く</span>
+          </button>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* VIEW 1: CARD GRID LAYOUT (ユーザー要望のカード型！)                       */}
       {/* ========================================================================= */}
@@ -1079,8 +1113,18 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Card Footer: Add SubItem Button */}
-                <div className="p-3 bg-slate-50/80 border-t border-slate-100">
+                {/* Card Footer: Add SubItem Button or Salary shortcut */}
+                <div className="p-3 bg-slate-50/80 border-t border-slate-100 space-y-2">
+                  {card.timingGroup === 'salary' && onNavigateToSalary && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToSalary}
+                      className="w-full py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Calculator className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>給与・役員報酬台帳（社保・税金自動計算）へ</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleOpenAddSubItem(card.id)}

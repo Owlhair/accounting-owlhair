@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Transaction, AppSettings, ChatMessage, TeamMember, TransactionRef, FiscalSettings, ExpenseCard } from './types';
+import { Transaction, AppSettings, ChatMessage, TeamMember, TransactionRef, FiscalSettings, ExpenseCard, SalaryEmployee, SalarySettings } from './types';
 import { 
   loadTransactions, 
   saveTransactions, 
@@ -42,6 +42,8 @@ import { ScratchFlowView } from './components/ScratchFlowView';
 import { MonthlyAggregationView } from './components/MonthlyAggregationView';
 import { StoreSalesCardBoard } from './components/StoreSalesCardBoard';
 import { ExpenseCardsView } from './components/ExpenseCardsView';
+import { SalaryView } from './components/SalaryView';
+import { SalaryTotalSummary, SalaryCalculationResult } from './utils/salaryCalculator';
 import { FinancialStatementView } from './components/FinancialStatementView';
 import { AddSalesModal } from './components/AddSalesModal';
 import { AddExpenseModal } from './components/AddExpenseModal';
@@ -67,7 +69,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
     try {
       const saved = localStorage.getItem('scratch_keiri_current_tab');
-      if (saved && ['dashboard', 'cards', 'list', 'scratch', 'monthly', 'statement'].includes(saved)) {
+      if (saved && ['dashboard', 'cards', 'expenseCards', 'salary', 'list', 'scratch', 'monthly', 'statement'].includes(saved)) {
         return saved as NavTab;
       }
     } catch (e) {}
@@ -495,6 +497,287 @@ export default function App() {
     );
   };
 
+  // Handler: Save Salary Employees
+  const handleSaveSalaryEmployees = (newEmployees: SalaryEmployee[]) => {
+    const updated: AppSettings = {
+      ...settings,
+      salaryEmployees: newEmployees,
+    };
+    setSettings(updated);
+    saveSettings(updated);
+    syncSaveSettingsToFirestore(updated);
+  };
+
+  // Handler: Save Salary Settings
+  const handleSaveSalarySettings = (newSalarySettings: SalarySettings) => {
+    const updated: AppSettings = {
+      ...settings,
+      salarySettings: newSalarySettings,
+    };
+    setSettings(updated);
+    saveSettings(updated);
+    syncSaveSettingsToFirestore(updated);
+  };
+
+  // Handler: Register Salary and Month-End Payments to Transactions
+  const handleRegisterSalaryToTransactions = (payload: {
+    targetMonth: string;
+    payDate: string;
+    monthEndDate: string;
+    summary: SalaryTotalSummary;
+    results: SalaryCalculationResult[];
+  }) => {
+    const { targetMonth, payDate, monthEndDate, summary } = payload;
+    const timestamp = new Date().toISOString();
+    const newTxList: Transaction[] = [];
+
+    // Ensure '法定福利費' category exists in expense categories
+    let updatedCategories = settings.expenseCategories;
+    if (!updatedCategories.includes('法定福利費')) {
+      updatedCategories = [...updatedCategories, '法定福利費'];
+      const updatedSettings = { ...settings, expenseCategories: updatedCategories };
+      setSettings(updatedSettings);
+      saveSettings(updatedSettings);
+      syncSaveSettingsToFirestore(updatedSettings);
+    }
+
+    // 1. 役員報酬支給（支給日: 25日等）
+    if (summary.totalExecutiveRemuneration > 0) {
+      newTxList.push({
+        id: `tx-sal-exec-${Date.now()}-1`,
+        date_from: payDate,
+        date_to: payDate,
+        type: 'expense',
+        category: '役員報酬',
+        store: '全社共通',
+        amount: summary.totalExecutiveRemuneration,
+        payment_method: '銀行振込',
+        granularity: 'monthly',
+        description: `${targetMonth}分 役員報酬支給 (${summary.executiveCount}名)`,
+        memo: `役員報酬（定期同額給与）。手取り振込＋源泉控除`,
+        source_type: 'manual',
+        confirmed: true,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
+
+    // 2. 給料手当支給（支給日: 25日等）
+    if (summary.totalStaffSalary > 0) {
+      newTxList.push({
+        id: `tx-sal-staff-${Date.now()}-2`,
+        date_from: payDate,
+        date_to: payDate,
+        type: 'expense',
+        category: '給料手当',
+        store: '全社共通',
+        amount: summary.totalStaffSalary,
+        payment_method: '銀行振込',
+        granularity: 'monthly',
+        description: `${targetMonth}分 給料手当支給 (${summary.staffCount}名)`,
+        memo: `スタッフ給与（手当 ¥${summary.totalAllowances.toLocaleString()}含む）手取り振込＋各種控除`,
+        source_type: 'manual',
+        confirmed: true,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
+
+    // 3. 【末の支払い】社会保険料納付 (健康保険・厚生年金・介護・子ども子育て拠出金)
+    // 会社負担分 ＋ 本人預り分 を合算した総納付額！
+    const socialInsPayment = summary.monthEndSummary.socialInsurancePayment;
+    if (socialInsPayment > 0) {
+      newTxList.push({
+        id: `tx-sal-soc-${Date.now()}-3`,
+        date_from: monthEndDate,
+        date_to: monthEndDate,
+        type: 'expense',
+        category: '法定福利費',
+        store: '全社共通',
+        amount: socialInsPayment,
+        payment_method: '口座振替',
+        granularity: 'monthly',
+        description: `${targetMonth}分 社会保険料納付 (会社負担分 + 本人預り分 合計)`,
+        memo: `【末の支払い】健保・厚年等口座引落。会社負担分: ¥${summary.totalCompanySocialInsurance.toLocaleString()} / 本人分預り: ¥${summary.totalSocialInsurance.toLocaleString()}`,
+        source_type: 'manual',
+        confirmed: true,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
+
+    // 4. 【末の支払い】雇用保険 会社負担分
+    const laborInsPayment = summary.monthEndSummary.laborInsurancePayment;
+    if (laborInsPayment > 0) {
+      newTxList.push({
+        id: `tx-sal-labor-${Date.now()}-4`,
+        date_from: monthEndDate,
+        date_to: monthEndDate,
+        type: 'expense',
+        category: '法定福利費',
+        store: '全社共通',
+        amount: laborInsPayment,
+        payment_method: '銀行振込',
+        granularity: 'monthly',
+        description: `${targetMonth}分 雇用保険 会社負担分（法定福利費）`,
+        memo: `【末の支払い】雇用保険の事業主会社負担分（総支給額 × 9.5/1000）`,
+        source_type: 'manual',
+        confirmed: true,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
+
+    // 5. 【末の支払い】源泉所得税・住民税 預り金納付
+    const taxPayment = summary.monthEndSummary.withholdingTaxPayment + summary.monthEndSummary.residentTaxPayment;
+    if (taxPayment > 0) {
+      newTxList.push({
+        id: `tx-sal-tax-${Date.now()}-5`,
+        date_from: monthEndDate,
+        date_to: monthEndDate,
+        type: 'expense',
+        category: '租税公課',
+        store: '全社共通',
+        amount: taxPayment,
+        payment_method: '銀行振込',
+        granularity: 'monthly',
+        description: `${targetMonth}分 源泉所得税・住民税納付（給与天引き預り金）`,
+        memo: `【末の支払い】源泉所得税 ¥${summary.monthEndSummary.withholdingTaxPayment.toLocaleString()} + 住民税 ¥${summary.monthEndSummary.residentTaxPayment.toLocaleString()} の納付`,
+        source_type: 'manual',
+        confirmed: true,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
+
+    setTransactions((prev) => {
+      const updated = [...newTxList, ...prev];
+      saveTransactions(updated);
+      return updated;
+    });
+
+    newTxList.forEach(tx => syncSaveTransactionToFirestore(tx));
+
+    const totalCost = summary.totalCompanyCost;
+    handleSendMessage(
+      `💼 【給与＆月末支払い計上】${targetMonth}月分の給与（役員報酬/給料手当）および【末の支払い（社保会社+本人合算納付 ¥${socialInsPayment.toLocaleString()}等）】計 ${newTxList.length} 件を一括計上しました。（会社総人件費: ¥${totalCost.toLocaleString()}）`
+    );
+
+    alert(
+      `✅ 【給与＆月末支払いの計上完了】\n${targetMonth}月分として計 ${newTxList.length} 件の取引データを登録しました！\n\n` +
+      `① 25日支給分:\n・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()}\n・給料手当: ¥${summary.totalStaffSalary.toLocaleString()}\n・手取り振込計: ¥${summary.totalNetSalary.toLocaleString()}\n\n` +
+      `② 月末の支払い納付分:\n・社会保険料 (会社負担+本人預り合算): ¥${socialInsPayment.toLocaleString()}\n・税金納付 (源泉+住民税): ¥${taxPayment.toLocaleString()}\n・雇用保険会社分: ¥${laborInsPayment.toLocaleString()}\n\n` +
+      `★ 月末の支払い合計: ¥${summary.monthEndSummary.totalMonthEndPayment.toLocaleString()}`
+    );
+  };
+
+  // Handler: Sync to Month-End Expense Card
+  const handleSyncToMonthEndExpenseCard = (summary: SalaryTotalSummary, targetMonth: string) => {
+    const currentCards = [...(settings.expenseCards || [])];
+    let monthEndCard = currentCards.find(c => c.timingGroup === 'month_end');
+    
+    const socialInsTotal = summary.monthEndSummary.socialInsurancePayment;
+    const laborInsTotal = summary.monthEndSummary.laborInsurancePayment;
+    const taxesTotal = summary.monthEndSummary.withholdingTaxPayment + summary.monthEndSummary.residentTaxPayment;
+
+    if (!monthEndCard) {
+      monthEndCard = {
+        id: `ec-month-end-${Date.now()}`,
+        title: '月末まとめて支払うもの（請求書・社保・税金）',
+        timingGroup: 'month_end',
+        paymentMethod: '口座振替',
+        store: '全社共通',
+        memo: '社会保険料・税金・買掛金など',
+        subItems: [],
+      };
+      currentCards.push(monthEndCard);
+    }
+
+    const existingSubItems = [...(monthEndCard.subItems || [])];
+    
+    // 1. 社会保険料（会社負担＋本人分合算）
+    const socIdx = existingSubItems.findIndex(i => i.name.includes('社会保険料'));
+    if (socIdx >= 0) {
+      existingSubItems[socIdx] = {
+        ...existingSubItems[socIdx],
+        defaultAmount: socialInsTotal,
+        memo: `社保本人+会社負担分合算 (${targetMonth}時点)`,
+      };
+    } else {
+      existingSubItems.push({
+        id: `sub-soc-${Date.now()}`,
+        name: '社会保険料納付（会社負担＋本人分合算）',
+        category: '法定福利費',
+        costType: 'fixed',
+        defaultAmount: socialInsTotal,
+        store: '全社共通',
+        memo: `健保・厚年・介護・子ども子育て (本人+会社負担合算)`,
+      });
+    }
+
+    // 2. 労働保険
+    if (laborInsTotal > 0) {
+      const laborIdx = existingSubItems.findIndex(i => i.name.includes('雇用保険') || i.name.includes('労働保険'));
+      if (laborIdx >= 0) {
+        existingSubItems[laborIdx] = {
+          ...existingSubItems[laborIdx],
+          defaultAmount: laborInsTotal,
+        };
+      } else {
+        existingSubItems.push({
+          id: `sub-labor-${Date.now()}`,
+          name: '雇用保険・労働保険（会社負担分）',
+          category: '法定福利費',
+          costType: 'fixed',
+          defaultAmount: laborInsTotal,
+          store: '全社共通',
+          memo: '事業主会社負担分',
+        });
+      }
+    }
+
+    // 3. 源泉税・住民税
+    if (taxesTotal > 0) {
+      const taxIdx = existingSubItems.findIndex(i => i.name.includes('源泉') || i.name.includes('税金納付'));
+      if (taxIdx >= 0) {
+        existingSubItems[taxIdx] = {
+          ...existingSubItems[taxIdx],
+          defaultAmount: taxesTotal,
+        };
+      } else {
+        existingSubItems.push({
+          id: `sub-tax-${Date.now()}`,
+          name: '源泉所得税・住民税（預り金納付）',
+          category: '租税公課',
+          costType: 'fixed',
+          defaultAmount: taxesTotal,
+          store: '全社共通',
+          memo: '給与天引き分の月末納付',
+        });
+      }
+    }
+
+    monthEndCard.subItems = existingSubItems;
+    const updatedCards = currentCards.map(c => c.id === monthEndCard!.id ? monthEndCard! : c);
+
+    const updatedSettings: AppSettings = {
+      ...settings,
+      expenseCards: updatedCards,
+    };
+
+    setSettings(updatedSettings);
+    saveSettings(updatedSettings);
+    syncSaveSettingsToFirestore(updatedSettings);
+
+    alert(
+      `✅ 経費カード「2. 末にまとめて払うもの」に以下の品目と金額を自動反映しました！\n\n` +
+      `・社会保険料納付 (会社負担+本人分合算): ¥${socialInsTotal.toLocaleString()}\n` +
+      `・税金納付 (源泉税+住民税): ¥${taxesTotal.toLocaleString()}\n` +
+      `・雇用保険会社負担分: ¥${laborInsTotal.toLocaleString()}\n\n` +
+      `「経費カード」タブを開くと、末払いのカード内にそのまま反映されていることを確認できます。`
+    );
+  };
+
   // Handler: Save Settings (Fiscal & Stores)
   const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[], newClosedStores: string[] = []) => {
     const isFiscalChanged =
@@ -697,6 +980,21 @@ export default function App() {
             onSelectFilter={setSelectedFilter}
             onRegisterExpenseBatch={handleRegisterExpenseBatch}
             onSaveExpenseCards={handleSaveExpenseCards}
+            onNavigateToSalary={() => setCurrentTab('salary')}
+          />
+        )}
+
+        {currentTab === 'salary' && (
+          <SalaryView
+            settings={settings}
+            transactions={transactions}
+            fiscalPeriods={fiscalPeriods}
+            selectedFilter={selectedFilter}
+            onSelectFilter={setSelectedFilter}
+            onSaveSalaryEmployees={handleSaveSalaryEmployees}
+            onSaveSalarySettings={handleSaveSalarySettings}
+            onRegisterSalaryToTransactions={handleRegisterSalaryToTransactions}
+            onSyncToMonthEndExpenseCard={handleSyncToMonthEndExpenseCard}
           />
         )}
 

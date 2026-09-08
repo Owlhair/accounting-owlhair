@@ -1,4 +1,5 @@
 import { Transaction, AppSettings, ExpenseCard } from '../types';
+import { DEFAULT_SALARY_EMPLOYEES, DEFAULT_SALARY_SETTINGS } from './salaryCalculator';
 
 const STORAGE_KEY_TRANSACTIONS = 'scratch_keiri_transactions_v1';
 const STORAGE_KEY_SETTINGS = 'scratch_keiri_settings_v1';
@@ -384,6 +385,8 @@ export const loadSettings = (): AppSettings => {
       stores,
       closedStores,
       expenseCards: parsed.expenseCards && parsed.expenseCards.length > 0 ? parsed.expenseCards : DEFAULT_EXPENSE_CARDS,
+      salaryEmployees: parsed.salaryEmployees && parsed.salaryEmployees.length > 0 ? parsed.salaryEmployees : DEFAULT_SALARY_EMPLOYEES,
+      salarySettings: parsed.salarySettings || DEFAULT_SALARY_SETTINGS,
       fiscalSettings: {
         fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
         fiscalYearStartYear: parsed.fiscalSettings?.fiscalYearStartYear ?? DEFAULT_FISCAL_SETTINGS.fiscalYearStartYear,
@@ -398,6 +401,8 @@ export const loadSettings = (): AppSettings => {
       stores: DEFAULT_STORES,
       closedStores: [],
       expenseCards: DEFAULT_EXPENSE_CARDS,
+      salaryEmployees: DEFAULT_SALARY_EMPLOYEES,
+      salarySettings: DEFAULT_SALARY_SETTINGS,
       fiscalSettings: DEFAULT_FISCAL_SETTINGS,
     };
   }

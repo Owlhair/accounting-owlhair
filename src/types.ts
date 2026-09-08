@@ -78,6 +78,85 @@ export interface StoreStatusInfo {
   memo?: string;
 }
 
+// 給与・役員報酬の種別
+export type SalaryEmployeeType = 'salary' | 'executive'; // 給与（給料手当） | 役員報酬
+
+export interface SalaryAllowance {
+  id: string;
+  title: string;       // 手当名（役職手当、通勤手当、固定残業代など）
+  amount: number;      // 金額
+  isTaxable?: boolean; // 課税対象か（通勤手当の一部などは非課税だが原則課税）
+}
+
+export interface SalaryEmployee {
+  id: string;
+  name: string;                    // 氏名
+  type: SalaryEmployeeType;        // 名目: 給与 / 役員報酬
+  store: string;                   // 帰属店舗（太宰府店、本店、全社共通など）
+  baseSalary: number;              // 基本給 / 報酬月額
+  allowances: SalaryAllowance[];   // 各種手当
+  hasSocialInsurance: boolean;     // 社会保険（健康保険・厚生年金）オン/オフ
+  hasEmploymentInsurance: boolean; // 雇用保険 オン/オフ（役員は原則OFF）
+  hasCareInsurance?: boolean;      // 介護保険（40歳以上65歳未満）オン/オフ
+  dependentsCount: number;         // 扶養親族等の数（源泉税計算用、0人〜）
+  residentTax: number;             // 住民税（毎月の特別徴収額）
+  memo?: string;                   // 備考・口座情報など
+  isActive: boolean;               // 在籍中（オン/オフ）
+  // 手動微調整（決定通知書の確定金額で上書きしたい場合）
+  customOverrides?: {
+    healthInsurance?: number;      // 健保本人負担
+    welfarePension?: number;       // 厚年本人負担
+    employmentInsurance?: number;  // 雇用保険本人負担
+    incomeTax?: number;            // 源泉所得税
+  };
+}
+
+export interface SalarySettings {
+  payDay: number;                  // 給与支給日（例: 25日）
+  monthEndPayDay: number;          // 月末支払日（例: 月末=0 または 翌月末等）
+  // 料率設定（標準プリセットあり）
+  healthInsuranceRate: number;     // 健保折半率（例: 0.05 = 5.0%）
+  careInsuranceRate: number;       // 介護折半率（例: 0.008 = 0.8%）
+  pensionRate: number;             // 厚年折半率（例: 0.0915 = 9.15%）
+  empInsuranceEmployeeRate: number;// 雇用保険本人負担率（例: 0.006 = 0.6%）
+  empInsuranceCompanyRate: number; // 雇用保険会社負担率（例: 0.0095 = 0.95%）
+  childContributionRate: number;   // 子ども子育て拠出金率（例: 0.0036 = 0.36%）
+}
+
+export interface SalaryCalculationResult {
+  employee: SalaryEmployee;
+  totalBase: number;               // 基本給
+  totalAllowances: number;         // 手当計
+  grossSalary: number;             // 総支給額 (額面)
+  
+  // 本人控除項目
+  healthInsurance: number;         // 健康保険料（本人分）
+  careInsurance: number;           // 介護保険料（本人分）
+  welfarePension: number;          // 厚生年金保険料（本人分）
+  socialInsuranceTotal: number;    // 社会保険料本人負担合計 (健保+介護+厚年)
+  employmentInsurance: number;     // 雇用保険料（本人分）
+  taxableAmount: number;           // 課税対象額
+  incomeTax: number;               // 源泉所得税
+  residentTax: number;             // 住民税
+  totalDeductions: number;         // 控除合計額
+  netSalary: number;               // 差引支給額 (手取り振込額)
+  
+  // 会社負担分 (法定福利費)
+  companyHealthInsurance: number;  // 健保（会社負担）
+  companyCareInsurance: number;    // 介護（会社負担）
+  companyWelfarePension: number;   // 厚年（会社負担）
+  companyChildContribution: number;// 子ども・子育て拠出金（会社全額負担）
+  companySocialInsuranceTotal: number; // 社保会社負担計
+  companyEmploymentInsurance: number;  // 雇用保険会社負担
+  companyTotalStatutoryWelfare: number;// 会社負担法定福利費計
+  
+  // 総人件費
+  totalCompanyCost: number;        // 会社の総人件費 (総支給額 + 法定福利費会社負担)
+  
+  // 月末にまとめて納付する金額（本人分預り金 + 会社負担分）
+  monthEndPaymentTotal: number;    // (社保本人+社保会社) + 雇用保険会社 + 源泉税 + 住民税
+}
+
 export interface AppSettings {
   salesCategories: string[];
   expenseCategories: string[];
@@ -85,6 +164,8 @@ export interface AppSettings {
   stores: string[]; // 店舗リスト (例: ['全社共通', '本店', '2号店'])
   closedStores?: string[]; // 閉店・休業中の店舗リスト (オンオフのオフ)
   expenseCards?: ExpenseCard[]; // 経費カード一覧設定
+  salaryEmployees?: SalaryEmployee[]; // 給与・役員報酬 メンバー設定
+  salarySettings?: SalarySettings;     // 給与計算・料率設定
   fiscalSettings: FiscalSettings;
 }
 
