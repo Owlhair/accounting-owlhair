@@ -498,10 +498,15 @@ export default function App() {
   };
 
   // Handler: Save Salary Employees
-  const handleSaveSalaryEmployees = (newEmployees: SalaryEmployee[]) => {
+  const handleSaveSalaryEmployees = (newEmployees: SalaryEmployee[], targetMonth?: string) => {
+    const snapshots = { ...(settings.monthlySalarySnapshots || {}) };
+    if (targetMonth) {
+      snapshots[targetMonth] = newEmployees;
+    }
     const updated: AppSettings = {
       ...settings,
       salaryEmployees: newEmployees,
+      monthlySalarySnapshots: snapshots,
     };
     setSettings(updated);
     saveSettings(updated);
@@ -527,19 +532,29 @@ export default function App() {
     summary: SalaryTotalSummary;
     results: SalaryCalculationResult[];
   }) => {
-    const { targetMonth, payDate, monthEndDate, summary } = payload;
+    const { targetMonth, payDate, monthEndDate, summary, results } = payload;
     const timestamp = new Date().toISOString();
     const newTxList: Transaction[] = [];
+
+    // Save current employees to monthly snapshots
+    const snapshots = { ...(settings.monthlySalarySnapshots || {}) };
+    if (results && results.length > 0) {
+      snapshots[targetMonth] = results.map(r => r.employee);
+    }
 
     // Ensure '法定福利費' category exists in expense categories
     let updatedCategories = settings.expenseCategories;
     if (!updatedCategories.includes('法定福利費')) {
       updatedCategories = [...updatedCategories, '法定福利費'];
-      const updatedSettings = { ...settings, expenseCategories: updatedCategories };
-      setSettings(updatedSettings);
-      saveSettings(updatedSettings);
-      syncSaveSettingsToFirestore(updatedSettings);
     }
+    const updatedSettings = { 
+      ...settings, 
+      expenseCategories: updatedCategories,
+      monthlySalarySnapshots: snapshots,
+    };
+    setSettings(updatedSettings);
+    saveSettings(updatedSettings);
+    syncSaveSettingsToFirestore(updatedSettings);
 
     // 1. 役員報酬支給（支給日: 25日等）
     if (summary.totalExecutiveRemuneration > 0) {

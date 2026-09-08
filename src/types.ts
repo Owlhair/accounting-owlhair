@@ -165,6 +165,7 @@ export interface AppSettings {
   closedStores?: string[]; // 閉店・休業中の店舗リスト (オンオフのオフ)
   expenseCards?: ExpenseCard[]; // 経費カード一覧設定
   salaryEmployees?: SalaryEmployee[]; // 給与・役員報酬 メンバー設定
+  monthlySalarySnapshots?: Record<string, SalaryEmployee[]>; // 月ごとの給与台帳スナップショット (例: { '2025-08': [...] })
   salarySettings?: SalarySettings;     // 給与計算・料率設定
   fiscalSettings: FiscalSettings;
 }

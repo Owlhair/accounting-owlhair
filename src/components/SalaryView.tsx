@@ -16,6 +16,7 @@ import {
   ArrowRight, 
   Settings, 
   ChevronRight, 
+  ChevronLeft,
   ArrowUpRight, 
   Coins, 
   CreditCard, 
@@ -23,7 +24,10 @@ import {
   Sparkles,
   Layers,
   ChevronDown,
-  Info
+  Info,
+  Check,
+  History,
+  RefreshCw
 } from 'lucide-react';
 import { 
   SalaryEmployee, 
@@ -42,13 +46,43 @@ import {
   SalaryTotalSummary 
 } from '../utils/salaryCalculator';
 
+// Format YYYY-MM to Japanese display (例: "2025年8月")
+const formatMonthLabel = (m: string) => {
+  if (!m) return '';
+  const parts = m.split('-');
+  if (parts.length >= 2) {
+    return `${parts[0]}年${parseInt(parts[1], 10)}月`;
+  }
+  return m;
+};
+
+// Calculate previous month YYYY-MM
+const getPreviousMonth = (m: string): string => {
+  if (!m || !m.includes('-')) return '2025-07';
+  const [y, mon] = m.split('-').map(Number);
+  const prevDate = new Date(y, mon - 2, 1);
+  const py = prevDate.getFullYear();
+  const pm = String(prevDate.getMonth() + 1).padStart(2, '0');
+  return `${py}-${pm}`;
+};
+
+// Calculate next month YYYY-MM
+const getNextMonth = (m: string): string => {
+  if (!m || !m.includes('-')) return '2025-09';
+  const [y, mon] = m.split('-').map(Number);
+  const nextDate = new Date(y, mon, 1);
+  const ny = nextDate.getFullYear();
+  const nm = String(nextDate.getMonth() + 1).padStart(2, '0');
+  return `${ny}-${nm}`;
+};
+
 interface SalaryViewProps {
   settings: AppSettings;
   transactions: Transaction[];
   fiscalPeriods: FiscalPeriod[];
   selectedFilter: string;
   onSelectFilter: (filter: string) => void;
-  onSaveSalaryEmployees: (employees: SalaryEmployee[]) => void;
+  onSaveSalaryEmployees: (employees: SalaryEmployee[], targetMonth?: string) => void;
   onSaveSalarySettings: (settings: SalarySettings) => void;
   onRegisterSalaryToTransactions: (payload: {
     targetMonth: string;
@@ -71,9 +105,6 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   onRegisterSalaryToTransactions,
   onSyncToMonthEndExpenseCard,
 }) => {
-  const employees = useMemo(() => settings.salaryEmployees || [], [settings.salaryEmployees]);
-  const salarySettings = useMemo(() => settings.salarySettings || DEFAULT_SALARY_SETTINGS, [settings.salarySettings]);
-
   // Determine current active month
   const activeMonth = useMemo(() => {
     if (selectedFilter && !selectedFilter.startsWith('period-') && selectedFilter !== 'ALL') {
@@ -86,9 +117,35 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
     return '2025-08';
   }, [selectedFilter, fiscalPeriods]);
 
+  // Previous & Next months
+  const prevMonth = useMemo(() => getPreviousMonth(activeMonth), [activeMonth]);
+  const nextMonth = useMemo(() => getNextMonth(activeMonth), [activeMonth]);
+
+  // Helper to get employees for a specific month (from snapshots, fallback to current settings)
+  const getEmployeesForMonth = (targetMonth: string): SalaryEmployee[] => {
+    if (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth]) {
+      return settings.monthlySalarySnapshots[targetMonth];
+    }
+    return settings.salaryEmployees || [];
+  };
+
+  // Employees for current activeMonth
+  const employees = useMemo(() => {
+    return getEmployeesForMonth(activeMonth);
+  }, [settings.monthlySalarySnapshots, settings.salaryEmployees, activeMonth]);
+
+  const salarySettings = useMemo(() => settings.salarySettings || DEFAULT_SALARY_SETTINGS, [settings.salarySettings]);
+
+  // Save employees wrapper that persists to both activeMonth snapshot and global settings
+  const saveEmployees = (updated: SalaryEmployee[]) => {
+    onSaveSalaryEmployees(updated, activeMonth);
+  };
+
   // Modal / Editing states
   const [editingEmployee, setEditingEmployee] = useState<SalaryEmployee | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+  const [copySourceMonth, setCopySourceMonth] = useState<string>(prevMonth);
   const [overrideModalEmployee, setOverrideModalEmployee] = useState<SalaryEmployee | null>(null);
   const [activeTabSubView, setActiveTabSubView] = useState<'cards' | 'table'>('cards');
   const [storeFilter, setStoreFilter] = useState<string>('ALL');
@@ -145,7 +202,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: toggle employment insurance
@@ -156,7 +213,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: toggle employee type (役員報酬 ⇄ 給与)
@@ -170,7 +227,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: toggle active
@@ -181,7 +238,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: update base salary
@@ -192,7 +249,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: update resident tax
@@ -203,7 +260,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: duplicate employee
@@ -213,14 +270,14 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       id: `emp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: `${emp.name} (コピー)`,
     };
-    onSaveSalaryEmployees([...employees, newEmp]);
+    saveEmployees([...employees, newEmp]);
   };
 
   // Helper: delete employee
   const handleDeleteEmployee = (empId: string) => {
-    if (confirm('このメンバー（役員/従業員）を削除してよろしいですか？')) {
+    if (confirm(`メンバー「${employees.find(e => e.id === empId)?.name || '未選択'}」を削除してよろしいですか？`)) {
       const updated = employees.filter(e => e.id !== empId);
-      onSaveSalaryEmployees(updated);
+      saveEmployees(updated);
     }
   };
 
@@ -238,7 +295,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: update allowance
@@ -255,7 +312,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: remove allowance
@@ -266,7 +323,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       }
       return emp;
     });
-    onSaveSalaryEmployees(updated);
+    saveEmployees(updated);
   };
 
   // Helper: create new employee
@@ -285,7 +342,108 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       residentTax: 0,
       isActive: true,
     };
-    onSaveSalaryEmployees([...employees, newEmp]);
+    saveEmployees([...employees, newEmp]);
+  };
+
+  // Copy Feature: Copy from previous month
+  const handleCopyFromPrevMonth = () => {
+    const source = getEmployeesForMonth(prevMonth);
+    if (!source || source.length === 0) {
+      alert(`前月（${formatMonthLabel(prevMonth)}）の給与データが見つかりませんでした。`);
+      return;
+    }
+
+    const prevResults = source.map(emp => calculateEmployeeSalary(emp, salarySettings));
+    const prevSummary = calculateTotalSalarySummary(prevResults);
+
+    const ok = confirm(
+      `📋 【前月給与のコピー反映】\n\n` +
+      `前月（${formatMonthLabel(prevMonth)}）の給与設定を、当月（${formatMonthLabel(activeMonth)}）へ丸ごとコピーしますか？\n\n` +
+      `・対象人数: ${prevSummary.employeeCount}名 (役員${prevSummary.executiveCount}名、スタッフ${prevSummary.staffCount}名)\n` +
+      `・当月総支給額（額面）: ¥${prevSummary.totalGross.toLocaleString()}\n` +
+      `・手取り振込総額: ¥${prevSummary.totalNetSalary.toLocaleString()}\n\n` +
+      `※現在の当月（${formatMonthLabel(activeMonth)}）の設定内容は上書きされます。`
+    );
+
+    if (ok) {
+      const cloned: SalaryEmployee[] = JSON.parse(JSON.stringify(source));
+      saveEmployees(cloned);
+      alert(`✅ 前月（${formatMonthLabel(prevMonth)}）の給与設定を当月（${formatMonthLabel(activeMonth)}）にコピー反映しました！`);
+    }
+  };
+
+  // Copy Feature: Execute copy from a specified month
+  const handleExecuteCopyFromMonth = (sourceMonth: string) => {
+    const source = getEmployeesForMonth(sourceMonth);
+    if (!source || source.length === 0) {
+      alert(`${formatMonthLabel(sourceMonth)}の給与データが見つかりませんでした。`);
+      return;
+    }
+
+    const srcResults = source.map(emp => calculateEmployeeSalary(emp, salarySettings));
+    const srcSummary = calculateTotalSalarySummary(srcResults);
+
+    const ok = confirm(
+      `📋 【指定月給与のコピー反映】\n\n` +
+      `${formatMonthLabel(sourceMonth)}の給与設定を、当月（${formatMonthLabel(activeMonth)}）へコピーしますか？\n\n` +
+      `・対象人数: ${srcSummary.employeeCount}名 (役員${srcSummary.executiveCount}名、スタッフ${srcSummary.staffCount}名)\n` +
+      `・総支給額: ¥${srcSummary.totalGross.toLocaleString()}\n` +
+      `・手取り振込計: ¥${srcSummary.totalNetSalary.toLocaleString()}`
+    );
+
+    if (ok) {
+      const cloned: SalaryEmployee[] = JSON.parse(JSON.stringify(source));
+      saveEmployees(cloned);
+      setIsCopyModalOpen(false);
+      alert(`✅ ${formatMonthLabel(sourceMonth)}の給与設定を当月（${formatMonthLabel(activeMonth)}）にコピー反映しました！`);
+    }
+  };
+
+  // Copy Feature: Quick register same as previous month to transactions
+  const handleRegisterSameAsPrevMonth = () => {
+    const source = getEmployeesForMonth(prevMonth);
+    if (!source || source.length === 0) {
+      alert(`前月（${formatMonthLabel(prevMonth)}）の給与データが見つかりませんでした。`);
+      return;
+    }
+
+    const results = source.map(emp => calculateEmployeeSalary(emp, salarySettings));
+    const prevSummary = calculateTotalSalarySummary(results);
+
+    const ok = confirm(
+      `⚡ 【前月と同額で一発計上】\n\n` +
+      `前月（${formatMonthLabel(prevMonth)}）と全く同じ給与・社保内容で、当月（${formatMonthLabel(activeMonth)}）の取引データに一括登録しますか？\n\n` +
+      `【支給日(${salarySettings.payDay}日)の計上】\n` +
+      `・役員報酬: ¥${prevSummary.totalExecutiveRemuneration.toLocaleString()} (${prevSummary.executiveCount}名)\n` +
+      `・給料手当: ¥${prevSummary.totalStaffSalary.toLocaleString()} (${prevSummary.staffCount}名)\n` +
+      `・手取り振込計: ¥${prevSummary.totalNetSalary.toLocaleString()}\n\n` +
+      `【末日の納付計上】\n` +
+      `・月末にまとめて払うもの（社保労使計＋税金）: ¥${prevSummary.monthEndSummary.totalMonthEndPayment.toLocaleString()}\n\n` +
+      `よろしければ「OK」を押してください。`
+    );
+
+    if (ok) {
+      // 1. 当月スナップショットにも確実に保存
+      const cloned: SalaryEmployee[] = JSON.parse(JSON.stringify(source));
+      saveEmployees(cloned);
+
+      // 2. 取引データへ登録実行
+      const [yearStr, monthStr] = activeMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const payDay = salarySettings.payDay || 25;
+      const payDate = `${activeMonth}-${String(payDay).padStart(2, '0')}`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const monthEndDate = `${activeMonth}-${String(lastDay).padStart(2, '0')}`;
+
+      onRegisterSalaryToTransactions({
+        targetMonth: activeMonth,
+        payDate,
+        monthEndDate,
+        summary: prevSummary,
+        results,
+      });
+    }
   };
 
   // Trigger: Register to Transactions
@@ -334,27 +492,64 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
           {/* Right Action Controls */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Month Filter Selector */}
-            <div className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
-              <Calendar className="w-4 h-4 text-gray-500 ml-1" />
-              <select
-                value={activeMonth}
-                onChange={(e) => onSelectFilter(e.target.value)}
-                className="bg-transparent text-xs font-bold text-gray-800 focus:outline-hidden cursor-pointer"
+            {/* Month Filter Selector with Prev / Next Navigation */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => onSelectFilter(prevMonth)}
+                title={`前月（${formatMonthLabel(prevMonth)}）へ移動`}
+                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors cursor-pointer"
               >
-                {fiscalPeriods.flatMap(p => p.months).slice().reverse().map(m => (
-                  <option key={m} value={m}>
-                    {m.replace('-', '年 ')}月 給与
-                  </option>
-                ))}
-              </select>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-1.5 px-1.5">
+                <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <select
+                  value={activeMonth}
+                  onChange={(e) => onSelectFilter(e.target.value)}
+                  className="bg-transparent text-xs font-black text-slate-800 focus:outline-hidden cursor-pointer"
+                >
+                  {fiscalPeriods.map(period => {
+                    // 期内の月を降順（最新月が上、過去月が下）に整理
+                    const sortedPeriodMonths = period.months.slice().sort().reverse();
+                    return (
+                      <optgroup key={period.key} label={period.label}>
+                        {sortedPeriodMonths.map(m => {
+                          const isReg = transactions.some(t =>
+                            t.type === 'expense' &&
+                            (t.category === '役員報酬' || t.category === '給料手当') &&
+                            ((t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
+                          );
+                          const parts = m.split('-');
+                          const label = parts.length >= 2 ? `${parts[0]}年${parseInt(parts[1], 10)}月 給与分` : m;
+                          return (
+                            <option key={m} value={m}>
+                              {label} {isReg ? '✅ [計上済]' : ''}
+                            </option>
+                          );
+                        })}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onSelectFilter(nextMonth)}
+                title={`翌月（${formatMonthLabel(nextMonth)}）へ移動`}
+                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Settings Button */}
             <button
               type="button"
               onClick={() => setIsSettingsModalOpen(true)}
-              className="px-3 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex items-center gap-1.5"
+              className="px-3 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Settings className="w-3.5 h-3.5 text-gray-600" />
               <span>料率・支給日設定</span>
@@ -368,6 +563,75 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
             >
               <Plus className="w-4 h-4" />
               <span>メンバー追加</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Salary Copy & Smart Duplication Action Bar */}
+      <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 border border-emerald-200 rounded-2xl p-3 sm:p-4 shadow-2xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0 mt-0.5 sm:mt-0">
+              <Copy className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-black text-emerald-950">
+                  給与データ引き継ぎ・コピー機能
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-white text-emerald-800 rounded-md border border-emerald-300">
+                  {formatMonthLabel(activeMonth)} 給与分
+                </span>
+                {monthRegistrationStatus.isSalaryRegistered ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-600 text-white rounded-md shadow-2xs flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    今月分は計上済
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md border border-amber-300/80">
+                    今月分は未計上
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-emerald-800/90 mt-1">
+                役員報酬やスタッフ給与は基本的に毎月変わりません。前月（<strong>{formatMonthLabel(prevMonth)}</strong>）の内容を1クリックでそのまま今月にコピーしたり、同額で即座に取引計上できます。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1 lg:pt-0">
+            {/* 1. 前月からコピー */}
+            <button
+              type="button"
+              onClick={handleCopyFromPrevMonth}
+              className="px-3.5 py-2 bg-white hover:bg-emerald-50 text-emerald-900 text-xs font-black rounded-xl border border-emerald-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              title={`前月（${formatMonthLabel(prevMonth)}）のメンバー・給料・手当を当月にコピー`}
+            >
+              <Copy className="w-3.5 h-3.5 text-emerald-700" />
+              <span>前月（{formatMonthLabel(prevMonth)}）からコピー</span>
+            </button>
+
+            {/* 2. 他月からコピー */}
+            <button
+              type="button"
+              onClick={() => setIsCopyModalOpen(true)}
+              className="px-3 py-2 bg-emerald-100/90 hover:bg-emerald-200/90 text-emerald-900 text-xs font-bold rounded-xl border border-emerald-300/80 transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="過去の任意の月から選んでコピー"
+            >
+              <Calendar className="w-3.5 h-3.5 text-emerald-700" />
+              <span>他月からコピー...</span>
+            </button>
+
+            {/* 3. 前月と同額で一発登録 */}
+            <button
+              type="button"
+              onClick={handleRegisterSameAsPrevMonth}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              title={`前月と同額で当月（${formatMonthLabel(activeMonth)}）の役員報酬・給料手当・月末社保納付を一括計上`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>前月と同額で一発登録</span>
             </button>
           </div>
         </div>
@@ -491,6 +755,16 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={handleRegisterSameAsPrevMonth}
+            className="px-3.5 py-2.5 text-xs font-bold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+            title={`前月（${formatMonthLabel(prevMonth)}）と同額で今月の給与・月末支払いを一発計上`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>前月と同額で一発登録</span>
+          </button>
+
           {onSyncToMonthEndExpenseCard && (
             <button
               type="button"
@@ -907,6 +1181,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                 <th className="p-3 text-right text-emerald-800 bg-emerald-50/60 font-black">手取り振込額</th>
                 <th className="p-3 text-right text-blue-800">会社負担法定福利</th>
                 <th className="p-3 text-right text-rose-800 bg-rose-50/60 font-black">月末納付額</th>
+                <th className="p-3 text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -949,6 +1224,26 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                   </td>
                   <td className="p-3 text-right font-mono font-black text-rose-700 bg-rose-50/60">
                     ¥{r.monthEndPaymentTotal.toLocaleString()}
+                  </td>
+                  <td className="p-3 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleDuplicateEmployee(r.employee)}
+                        title="このメンバーを複製"
+                        className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEmployee(r.employee.id)}
+                        title="このメンバーを削除"
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1057,6 +1352,152 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                 className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer"
               >
                 設定を閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Copy Salary From Other Month Modal */}
+      {isCopyModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
+                  <Copy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    過去の月から給与設定をコピー
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    指定した月の役員報酬・基本給・手当・社保設定を当月（{formatMonthLabel(activeMonth)}）へ複製します。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCopyModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Select Source Month */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">
+                コピー元の給与月を選択:
+              </label>
+              <div className="relative">
+                <select
+                  value={copySourceMonth}
+                  onChange={(e) => setCopySourceMonth(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                >
+                  {fiscalPeriods.map(period => (
+                    <optgroup key={`copy-${period.key}`} label={period.label}>
+                      {period.months.slice().sort().reverse().map(m => {
+                        const hasSnap = Boolean(settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[m]);
+                        const isCurrent = m === activeMonth;
+                        return (
+                          <option key={`opt-${m}`} value={m} disabled={isCurrent}>
+                            {formatMonthLabel(m)} 給与 {isCurrent ? '（※現在開いている月）' : hasSnap ? '★ 保存済データあり' : ''}
+                          </option>
+                        );
+                      })}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Preview of the selected source month */}
+            {(() => {
+              const srcEmployees = getEmployeesForMonth(copySourceMonth);
+              const srcResults = srcEmployees.map(emp => calculateEmployeeSalary(emp, salarySettings));
+              const srcSummary = calculateTotalSalarySummary(srcResults);
+
+              return (
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <History className="w-4 h-4 text-emerald-600" />
+                      {formatMonthLabel(copySourceMonth)} の登録データプレビュー
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">
+                      対象: {srcSummary.employeeCount}名
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200/80">
+                      <span className="text-slate-400 block text-[10px]">総支給額（額面合計）</span>
+                      <span className="font-mono font-black text-slate-900 text-sm">
+                        ¥{srcSummary.totalGross.toLocaleString()}
+                      </span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">
+                        役員{srcSummary.executiveCount}名 / スタッフ{srcSummary.staffCount}名
+                      </span>
+                    </div>
+
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200/80">
+                      <span className="text-slate-400 block text-[10px]">手取り振込総額</span>
+                      <span className="font-mono font-black text-emerald-700 text-sm">
+                        ¥{srcSummary.totalNetSalary.toLocaleString()}
+                      </span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">
+                        月末納付計: ¥{srcSummary.monthEndSummary.totalMonthEndPayment.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Employee list preview */}
+                  <div className="max-h-36 overflow-y-auto divide-y divide-slate-200/60 bg-white rounded-lg border border-slate-200/80 text-[11px]">
+                    {srcEmployees.length === 0 ? (
+                      <div className="p-3 text-slate-400 text-center">データがありません</div>
+                    ) : (
+                      srcEmployees.map(emp => (
+                        <div key={emp.id} className="p-2 flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-slate-800">{emp.name}</span>
+                            <span className="text-[10px] text-slate-400 ml-1.5">({emp.store})</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                              emp.type === 'executive' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {emp.type === 'executive' ? '役員' : '給与'}
+                            </span>
+                            <span className="font-mono font-bold text-slate-700">
+                              ¥{(emp.baseSalary || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsCopyModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExecuteCopyFromMonth(copySourceMonth)}
+                className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>この内容を当月（{formatMonthLabel(activeMonth)}）へコピー</span>
               </button>
             </div>
           </div>
