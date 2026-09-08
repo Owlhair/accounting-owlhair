@@ -27,7 +27,10 @@ import {
   Info,
   Check,
   History,
-  RefreshCw
+  RefreshCw,
+  Clock,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { 
   SalaryEmployee, 
@@ -105,17 +108,64 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   onRegisterSalaryToTransactions,
   onSyncToMonthEndExpenseCard,
 }) => {
-  // Determine current active month
-  const activeMonth = useMemo(() => {
+  // Current active fiscal period (matches StoreSalesCardBoard & ExpenseCardsView)
+  const currentPeriod = useMemo(() => {
+    if (selectedFilter.startsWith('period-')) {
+      return fiscalPeriods.find(p => p.key === selectedFilter) || fiscalPeriods[0];
+    }
+    const containingPeriod = fiscalPeriods.find(p => p.months && p.months.includes(selectedFilter));
+    if (containingPeriod) return containingPeriod;
+    return fiscalPeriods[0] || {
+      periodNumber: 1,
+      label: '第1期',
+      key: 'period-1',
+      startDate: '2024-04-01',
+      endDate: '2025-03-31',
+      startMonth: '2024-04',
+      endMonth: '2025-03',
+      months: ['2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03'],
+    };
+  }, [selectedFilter, fiscalPeriods]);
+
+  // Selected Month within current period
+  const [activeMonth, setActiveMonth] = useState<string>(() => {
     if (selectedFilter && !selectedFilter.startsWith('period-') && selectedFilter !== 'ALL') {
       return selectedFilter;
     }
-    if (selectedFilter && selectedFilter.startsWith('period-')) {
-      const p = fiscalPeriods.find(fp => fp.key === selectedFilter);
-      if (p && p.months.length > 0) return p.months[p.months.length - 1];
+    if (currentPeriod?.months?.length > 0) {
+      const thisMonth = new Date().toISOString().substring(0, 7);
+      if (currentPeriod.months.includes(thisMonth)) return thisMonth;
+      return currentPeriod.months[currentPeriod.months.length - 1] || '2025-08';
     }
     return '2025-08';
-  }, [selectedFilter, fiscalPeriods]);
+  });
+
+  // Keep activeMonth in sync when period changes
+  React.useEffect(() => {
+    if (currentPeriod?.months?.length > 0 && !currentPeriod.months.includes(activeMonth)) {
+      setActiveMonth(currentPeriod.months[0]);
+    }
+  }, [currentPeriod, activeMonth]);
+
+  // When selectedFilter changes from external props (e.g. navbar or other tab)
+  React.useEffect(() => {
+    if (selectedFilter && !selectedFilter.startsWith('period-') && selectedFilter !== 'ALL' && selectedFilter !== activeMonth) {
+      setActiveMonth(selectedFilter);
+    }
+  }, [selectedFilter]);
+
+  const handleMonthSelect = (m: string) => {
+    setActiveMonth(m);
+    onSelectFilter(m);
+  };
+
+  const handlePeriodSelect = (periodKey: string) => {
+    onSelectFilter(periodKey);
+    const target = fiscalPeriods.find(p => p.key === periodKey);
+    if (target && target.months.length > 0) {
+      setActiveMonth(target.months[0]);
+    }
+  };
 
   // Previous & Next months
   const prevMonth = useMemo(() => getPreviousMonth(activeMonth), [activeMonth]);
@@ -135,6 +185,33 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   }, [settings.monthlySalarySnapshots, settings.salaryEmployees, activeMonth]);
 
   const salarySettings = useMemo(() => settings.salarySettings || DEFAULT_SALARY_SETTINGS, [settings.salarySettings]);
+
+  // Monthly totals for 12-month progress minimap
+  const salaryMonthTotals = useMemo(() => {
+    const totals: Record<string, { total: number; isRegistered: boolean; count: number }> = {};
+    currentPeriod.months.forEach((m) => {
+      // 1. Transactions matching salary
+      const txs = transactions.filter(
+        (t) =>
+          t.type === 'expense' &&
+          (t.category === '役員報酬' || t.category === '給料手当') &&
+          ((t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
+      );
+      const isRegistered = txs.length > 0;
+      let total = txs.reduce((acc, t) => acc + (t.amount || 0), 0);
+
+      // If no transaction yet, calculate from snapshot if available
+      if (total === 0 && settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[m]) {
+        const snap = settings.monthlySalarySnapshots[m];
+        const res = snap.map(emp => calculateEmployeeSalary(emp, salarySettings));
+        const sum = calculateTotalSalarySummary(res);
+        total = sum.totalGross;
+      }
+
+      totals[m] = { total, isRegistered, count: txs.length };
+    });
+    return totals;
+  }, [currentPeriod.months, transactions, settings.monthlySalarySnapshots, salarySettings]);
 
   // Save employees wrapper that persists to both activeMonth snapshot and global settings
   const saveEmployees = (updated: SalaryEmployee[]) => {
@@ -469,102 +546,154 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Month Selector */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-200/80 shadow-2xs">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-                給与・役員報酬 自動計算台帳
-              </span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                社保・雇用保険 労使折半自動連動
-              </span>
+      {/* Top Header Card: Title & Fiscal Period Selector (Matched to Sales Card & Expense Card) */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+              <Users className="w-5 h-5" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-              <Users className="w-6 h-6 text-emerald-600" />
-              給与・役員報酬と月末支払い
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              基本給・手当から社保・雇用保険・源泉税・住民税を自動計算。会社負担分を合算して「末の支払い」へ自動連動します。
-            </p>
-          </div>
-
-          {/* Right Action Controls */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Month Filter Selector with Prev / Next Navigation */}
-            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => onSelectFilter(prevMonth)}
-                title={`前月（${formatMonthLabel(prevMonth)}）へ移動`}
-                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-1.5 px-1.5">
-                <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <select
-                  value={activeMonth}
-                  onChange={(e) => onSelectFilter(e.target.value)}
-                  className="bg-transparent text-xs font-black text-slate-800 focus:outline-hidden cursor-pointer"
-                >
-                  {fiscalPeriods.map(period => {
-                    // 期内の月を降順（最新月が上、過去月が下）に整理
-                    const sortedPeriodMonths = period.months.slice().sort().reverse();
-                    return (
-                      <optgroup key={period.key} label={period.label}>
-                        {sortedPeriodMonths.map(m => {
-                          const isReg = transactions.some(t =>
-                            t.type === 'expense' &&
-                            (t.category === '役員報酬' || t.category === '給料手当') &&
-                            ((t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
-                          );
-                          const parts = m.split('-');
-                          const label = parts.length >= 2 ? `${parts[0]}年${parseInt(parts[1], 10)}月 給与分` : m;
-                          return (
-                            <option key={m} value={m}>
-                              {label} {isReg ? '✅ [計上済]' : ''}
-                            </option>
-                          );
-                        })}
-                      </optgroup>
-                    );
-                  })}
-                </select>
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  給与・役員報酬
+                </span>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  社保・雇用保険自動計算
+                </span>
               </div>
-
-              <button
-                type="button"
-                onClick={() => onSelectFilter(nextMonth)}
-                title={`翌月（${formatMonthLabel(nextMonth)}）へ移動`}
-                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-white rounded-lg transition-colors cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <h1 className="text-base font-bold text-slate-900">
+                給与・役員報酬と月末支払い
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                基本給・手当から社保・雇用保険・税金を自動計算し、会社負担分を合算して末の支払いに自動連動します
+              </p>
             </div>
+          </div>
+        </div>
 
-            {/* Settings Button */}
+        {/* Fiscal Period Switcher & Action Controls */}
+        <div className="flex items-center flex-wrap gap-2 w-full md:w-auto justify-between md:justify-end">
+          {/* Period Selector */}
+          <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-200">
+            <Calendar className="w-3.5 h-3.5 text-gray-500 ml-1.5" />
+            <select
+              value={selectedFilter.startsWith('period-') ? selectedFilter : currentPeriod?.key || 'period-1'}
+              onChange={(e) => handlePeriodSelect(e.target.value)}
+              className="text-xs font-bold bg-transparent text-gray-800 focus:outline-hidden pr-2 py-1 cursor-pointer"
+            >
+              {fiscalPeriods.map(p => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* SubView Switcher (Cards vs Table) */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1">
             <button
               type="button"
-              onClick={() => setIsSettingsModalOpen(true)}
-              className="px-3 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              onClick={() => setActiveTabSubView('cards')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTabSubView === 'cards'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
-              <Settings className="w-3.5 h-3.5 text-gray-600" />
-              <span>料率・支給日設定</span>
+              <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
+              <span>カード</span>
             </button>
-
-            {/* Add Employee Button */}
             <button
               type="button"
-              onClick={handleCreateEmployee}
-              className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              onClick={() => setActiveTabSubView('table')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTabSubView === 'table'
+                  ? 'bg-white text-emerald-800 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
             >
-              <Plus className="w-4 h-4" />
-              <span>メンバー追加</span>
+              <List className="w-3.5 h-3.5 text-emerald-600" />
+              <span>台帳</span>
             </button>
           </div>
+
+          {/* Settings Button */}
+          <button
+            type="button"
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Settings className="w-3.5 h-3.5 text-gray-600" />
+            <span>設定</span>
+          </button>
+
+          {/* Add Employee Button */}
+          <button
+            type="button"
+            onClick={handleCreateEmployee}
+            className="px-3.5 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>メンバー追加</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 12-Month Selector Pill Strip (Progress Tracker) - Matched to Sales Card */}
+      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/80 shadow-xs space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold text-gray-700 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-emerald-600" />
+            {currentPeriod.label} 月別進捗ミニマップ (対象月を選択):
+          </span>
+          <span className="text-[11px] text-gray-500 font-medium">
+            緑 = 給与計上済 / 灰 = 未計上
+          </span>
+        </div>
+
+        {/* 12 Month Pills Grid */}
+        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
+          {currentPeriod.months.map(m => {
+            const [, monthNum] = m.split('-');
+            const monthData = salaryMonthTotals[m] || { total: 0, isRegistered: false, count: 0 };
+            const isSelected = activeMonth === m;
+            const hasRegisteredTx = monthData.isRegistered;
+
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleMonthSelect(m)}
+                className={`py-2 px-1.5 rounded-xl text-center transition-all flex flex-col items-center justify-center border relative cursor-pointer ${
+                  isSelected
+                    ? 'ring-2 ring-emerald-500 bg-emerald-50/90 border-emerald-500 shadow-xs'
+                    : hasRegisteredTx
+                    ? 'bg-emerald-50/50 border-emerald-200 hover:bg-emerald-100/50'
+                    : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <span className={`text-xs font-black font-mono ${isSelected ? 'text-emerald-950' : 'text-gray-800'}`}>
+                  {parseInt(monthNum, 10)}月
+                </span>
+
+                <span className="text-[10px] font-bold font-mono text-gray-500">
+                  {monthData.total > 0 ? `¥${Math.round(monthData.total / 10000)}万` : '-'}
+                </span>
+
+                <div className="flex items-center gap-1 mt-1">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      hasRegisteredTx ? 'bg-emerald-500' : 'bg-gray-300'
+                    }`}
+                  />
+                  <span className="text-[9px] font-mono text-gray-400">
+                    {hasRegisteredTx ? '計上済' : '未'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 

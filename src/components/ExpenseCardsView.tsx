@@ -164,6 +164,28 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     return '2025-08';
   });
 
+  // Keep active month in sync when period changes
+  React.useEffect(() => {
+    if (currentPeriod?.months?.length > 0 && !currentPeriod.months.includes(activeMonth)) {
+      setActiveMonth(currentPeriod.months[0]);
+    }
+  }, [currentPeriod, activeMonth]);
+
+  // Monthly expense totals from transactions for the 12-month minimap
+  const expenseMonthTotals = useMemo(() => {
+    const totals: Record<string, { total: number; count: number }> = {};
+    currentPeriod.months.forEach((m) => {
+      const txs = transactions.filter(
+        (t) =>
+          t.type === 'expense' &&
+          ((t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
+      );
+      const sum = txs.reduce((acc, t) => acc + (t.amount || 0), 0);
+      totals[m] = { total: sum, count: txs.length };
+    });
+    return totals;
+  }, [currentPeriod.months, transactions]);
+
   // Layout View Mode: 'grid' (Card layout) vs 'list' (Classic table list)
   const [viewLayout, setViewLayout] = useState<'grid' | 'list'>(() => {
     try {
@@ -695,131 +717,182 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         </div>
       )}
 
-      {/* Top Main Banner & Controls */}
-      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold text-slate-900">
-                  経費カード一括入力
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  カード決済や月末支払いで<strong>「何を買ったか（品目）」ごとに勘定科目・固定/変動を分けて</strong>管理します
-                </p>
-              </div>
+      {/* Top Header Card: Title & Fiscal Period Selector */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+              <CreditCard className="w-5 h-5" />
             </div>
-          </div>
-
-          <div className="flex items-center flex-wrap gap-2">
-            {/* View Layout Switcher (Card Grid vs Table List) */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1">
-              <button
-                type="button"
-                onClick={() => handleLayoutChange('grid')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewLayout === 'grid'
-                    ? 'bg-white text-rose-700 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="カード型レイアウト"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>カード型</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleLayoutChange('list')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewLayout === 'list'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="リスト型レイアウト"
-              >
-                <List className="w-3.5 h-3.5" />
-                <span>リスト型</span>
-              </button>
+            <div>
+              <h1 className="text-base font-bold text-slate-900">
+                経費カード一括入力
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                カード決済や月末支払いで<strong>「何を買ったか（品目）」ごとに勘定科目・固定/変動を分けて</strong>管理します
+              </p>
             </div>
-
-            {/* Add Card Button */}
-            <button
-              type="button"
-              onClick={handleOpenAddCard}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>新しい支払い枠・カードを追加</span>
-            </button>
           </div>
         </div>
 
-        {/* Month Selector & Power Copy Bar */}
-        <div className="pt-4 border-t border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-              <Calendar className="w-4 h-4 text-slate-400" />
-              <span>対象月:</span>
-            </div>
+        {/* Fiscal Period Switcher & Action Controls */}
+        <div className="flex items-center flex-wrap gap-2 w-full md:w-auto justify-between md:justify-end">
+          {/* Period Selector */}
+          <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-200">
+            <Calendar className="w-3.5 h-3.5 text-gray-500 ml-1.5" />
+            <select
+              value={selectedFilter.startsWith('period-') ? selectedFilter : fiscalPeriods[0]?.key || 'period-1'}
+              onChange={(e) => onSelectFilter(e.target.value)}
+              className="text-xs font-bold bg-transparent text-gray-800 focus:outline-hidden pr-2 py-1 cursor-pointer"
+            >
+              {fiscalPeriods.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            {/* Month Buttons */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
-              {currentPeriod.months.map((m) => {
-                const monthNum = parseInt(m.split('-')[1], 10);
-                const isSelected = activeMonth === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => handleMonthChange(m)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                      isSelected
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
+          {/* View Layout Switcher (Card Grid vs Table List) */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1">
+            <button
+              type="button"
+              onClick={() => handleLayoutChange('grid')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewLayout === 'grid'
+                  ? 'bg-white text-rose-700 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="カード型レイアウト"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-rose-600" />
+              <span>カード型</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLayoutChange('list')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewLayout === 'list'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="リスト型レイアウト"
+            >
+              <List className="w-3.5 h-3.5 text-slate-600" />
+              <span>リスト型</span>
+            </button>
+          </div>
+
+          {/* Add Card Button */}
+          <button
+            type="button"
+            onClick={handleOpenAddCard}
+            className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>支払い枠・カード追加</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 12-Month Selector Pill Strip (Progress Tracker) - Matched to Sales Card */}
+      <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-200/80 shadow-xs space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold text-gray-700 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-rose-600" />
+            {currentPeriod.label} 月別進捗ミニマップ (対象月を選択):
+          </span>
+          <span className="text-[11px] text-gray-500 font-medium">
+            緑 = 経費計上済 / 灰 = 未計上
+          </span>
+        </div>
+
+        {/* 12 Month Pills Grid */}
+        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
+          {currentPeriod.months.map((m) => {
+            const [, monthNum] = m.split('-');
+            const monthData = expenseMonthTotals[m] || { total: 0, count: 0 };
+            const isSelected = activeMonth === m;
+            const hasRegisteredTx = monthData.count > 0;
+
+            return (
+              <button
+                key={m}
+                type="button"
+                onClick={() => handleMonthChange(m)}
+                className={`py-2 px-1.5 rounded-xl text-center transition-all flex flex-col items-center justify-center border relative cursor-pointer ${
+                  isSelected
+                    ? 'ring-2 ring-rose-500 bg-rose-50/90 border-rose-500 shadow-xs'
+                    : hasRegisteredTx
+                    ? 'bg-emerald-50/50 border-emerald-200 hover:bg-emerald-100/50'
+                    : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                <span className={`text-xs font-black font-mono ${isSelected ? 'text-rose-950' : 'text-gray-800'}`}>
+                  {parseInt(monthNum, 10)}月
+                </span>
+
+                <span className="text-[10px] font-bold font-mono text-gray-500">
+                  {monthData.total > 0 ? `¥${Math.round(monthData.total / 10000)}万` : '-'}
+                </span>
+
+                <div className="flex items-center gap-1 mt-1">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      hasRegisteredTx ? 'bg-emerald-500' : 'bg-gray-300'
                     }`}
-                  >
-                    {monthNum}月
-                  </button>
-                );
-              })}
-            </div>
+                  />
+                  <span className="text-[9px] font-mono text-gray-400">
+                    {hasRegisteredTx ? `${monthData.count}件` : '未'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-            {/* SUPER HELPFUL: COPY PREVIOUS MONTH BUTTON */}
-            <button
-              type="button"
-              onClick={() => handleCopyPreviousMonthData()}
-              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
-              title={`毎月重複する経費を前月(${parseInt(prevMonthStr.split('-')[1], 10)}月度)からワンクリックで一括反映します`}
-            >
-              <Copy className="w-3.5 h-3.5 text-indigo-600" />
-              <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) の金額をコピー</span>
-            </button>
+      {/* Active Month Quick Action Bar */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 bg-rose-100 text-rose-800 font-bold text-xs rounded-lg border border-rose-200">
+              {activeMonth.replace('-', '年 ')}月度 経費カード
+            </span>
           </div>
 
-          {/* Subtotal & Batch Submit */}
-          <div className="flex items-center gap-3 justify-between lg:justify-end">
-            <div className="bg-rose-50 border border-rose-100 px-3.5 py-1.5 rounded-xl flex items-center gap-2.5 text-xs">
-              <span className="text-rose-700 font-medium">
-                当月入力計 ({enteredItemsCount}件):
-              </span>
-              <span className="font-bold font-mono text-rose-900 text-sm">
-                ¥{totalEnteredAmount.toLocaleString()}
-              </span>
-            </div>
+          {/* SUPER HELPFUL: COPY PREVIOUS MONTH BUTTON */}
+          <button
+            type="button"
+            onClick={() => handleCopyPreviousMonthData()}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+            title={`毎月重複する経費を前月(${parseInt(prevMonthStr.split('-')[1], 10)}月度)からワンクリックで一括反映します`}
+          >
+            <Copy className="w-3.5 h-3.5 text-indigo-600" />
+            <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) の金額をコピー</span>
+          </button>
+        </div>
 
-            <button
-              type="button"
-              onClick={handleBatchRegister}
-              disabled={totalEnteredAmount <= 0}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{parseInt(activeMonth.split('-')[1], 10)}月分を一括登録する</span>
-            </button>
+        {/* Subtotal & Batch Submit */}
+        <div className="flex items-center gap-3 justify-between lg:justify-end">
+          <div className="bg-rose-50 border border-rose-100 px-3.5 py-1.5 rounded-xl flex items-center gap-2.5 text-xs">
+            <span className="text-rose-700 font-medium">
+              当月入力計 ({enteredItemsCount}件):
+            </span>
+            <span className="font-bold font-mono text-rose-900 text-sm">
+              ¥{totalEnteredAmount.toLocaleString()}
+            </span>
           </div>
+
+          <button
+            type="button"
+            onClick={handleBatchRegister}
+            disabled={totalEnteredAmount <= 0}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{parseInt(activeMonth.split('-')[1], 10)}月分を一括登録する</span>
+          </button>
         </div>
       </div>
 
