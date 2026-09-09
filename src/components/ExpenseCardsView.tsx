@@ -190,6 +190,9 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     return totals;
   }, [currentPeriod.months, transactions]);
 
+  // Registered expenses for the currently active month from ledger
+  const activeMonthRegistered = expenseMonthTotals[activeMonth] || { total: 0, count: 0 };
+
   // Layout View Mode: 'grid' (Card layout) vs 'list' (Classic table list)
   const [viewLayout, setViewLayout] = useState<'grid' | 'list'>(() => {
     try {
@@ -576,7 +579,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     return subtotal;
   };
 
-  // Calculate Total Entered Amount
+  // Calculate Total Entered Amount for filtered cards
   const totalEnteredAmount = useMemo(() => {
     let sum = 0;
     filteredCards.forEach((card) => {
@@ -585,7 +588,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     return sum;
   }, [filteredCards, inputs]);
 
-  // Calculate count of entered items
+  // Calculate count of entered items for filtered cards
   const enteredItemsCount = useMemo(() => {
     let count = 0;
     filteredCards.forEach((card) => {
@@ -610,11 +613,46 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     return count;
   }, [filteredCards, inputs]);
 
-  // Execute Batch Register
-  const handleBatchRegister = () => {
-    const itemsToRegister: BatchExpenseItem[] = [];
+  // Total across ALL cards for this activeMonth (regardless of timing filter)
+  const totalAllCardsAmount = useMemo(() => {
+    let sum = 0;
+    expenseCards.forEach((card) => {
+      sum += getCardEnteredSubtotal(card);
+    });
+    return sum;
+  }, [expenseCards, inputs]);
 
-    filteredCards.forEach((card) => {
+  // Total entered items count across ALL cards
+  const allCardsEnteredCount = useMemo(() => {
+    let count = 0;
+    expenseCards.forEach((card) => {
+      if (card.subItems && card.subItems.length > 0) {
+        card.subItems.forEach((sub) => {
+          const item = inputs[`${card.id}_${sub.id}`];
+          const isSelected = item?.isSelected ?? true;
+          const amt = item?.amount !== undefined && item?.amount !== '' 
+            ? Number(item.amount) 
+            : (sub.defaultAmount || 0);
+          if (isSelected && amt > 0) count++;
+        });
+      } else {
+        const item = inputs[card.id];
+        const isSelected = item?.isSelected ?? true;
+        const amt = item?.amount !== undefined && item?.amount !== '' 
+          ? Number(item.amount) 
+          : (card.defaultAmount || 0);
+        if (isSelected && amt > 0) count++;
+      }
+    });
+    return count;
+  }, [expenseCards, inputs]);
+
+  // Execute Batch Register (supports registering all cards or filtered cards)
+  const handleBatchRegister = (registerAllCards: boolean = false) => {
+    const itemsToRegister: BatchExpenseItem[] = [];
+    const targetCards = (registerAllCards || activeGroupFilter === 'ALL') ? expenseCards : filteredCards;
+
+    targetCards.forEach((card) => {
       const defaultDate = (card.timingGroup === 'month_end' || card.id.includes('month-end'))
         ? `${activeMonth}-${new Date(Number(activeMonth.split('-')[0]), Number(activeMonth.split('-')[1]), 0).getDate()}`
         : (card.timingGroup === 'salary'
@@ -670,8 +708,9 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
       return;
     }
 
+    const totalBatchAmt = itemsToRegister.reduce((sum, item) => sum + item.amount, 0);
     onRegisterExpenseBatch(itemsToRegister);
-    showToast(`🎉 ${activeMonth}月分の経費 ${itemsToRegister.length}件 (合計 ¥${totalEnteredAmount.toLocaleString()}) を一括登録しました！`);
+    showToast(`🎉 ${activeMonth}月分の経費 ${itemsToRegister.length}件 (合計 ¥${totalBatchAmt.toLocaleString()}) を出納帳へ一括計上しました！`);
   };
 
   // Register a single card's items to transactions immediately
@@ -1002,17 +1041,21 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                 </span>
 
                 <span className="text-[10px] font-bold font-mono text-gray-500">
-                  {monthData.total > 0 ? `¥${Math.round(monthData.total / 10000)}万` : '-'}
+                  {monthData.total > 0 
+                    ? `¥${Math.round(monthData.total / 10000)}万` 
+                    : (isSelected && totalAllCardsAmount > 0 
+                        ? `予 ¥${Math.round(totalAllCardsAmount / 10000)}万` 
+                        : '-')}
                 </span>
 
                 <div className="flex items-center gap-1 mt-1">
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      hasRegisteredTx ? 'bg-emerald-500' : 'bg-gray-300'
+                      hasRegisteredTx ? 'bg-emerald-500' : isSelected && totalAllCardsAmount > 0 ? 'bg-amber-400' : 'bg-gray-300'
                     }`}
                   />
                   <span className="text-[9px] font-mono text-gray-400">
-                    {hasRegisteredTx ? `${monthData.count}件` : '未'}
+                    {hasRegisteredTx ? `${monthData.count}件` : isSelected && totalAllCardsAmount > 0 ? '予定' : '未'}
                   </span>
                 </div>
               </button>
@@ -1022,8 +1065,8 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
       </div>
 
       {/* Active Month Quick Action Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 bg-rose-100 text-rose-800 font-bold text-xs rounded-lg border border-rose-200">
               {activeMonth.replace('-', '年 ')}月度 経費カード
@@ -1038,7 +1081,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             title={`毎月重複する経費を前月(${parseInt(prevMonthStr.split('-')[1], 10)}月度)からワンクリックで一括反映します`}
           >
             <Copy className="w-3.5 h-3.5 text-indigo-600" />
-            <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) の金額をコピー</span>
+            <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) コピー</span>
           </button>
 
           {/* SYNC SALARY BUTTON: 給与台帳の出来上がりカードを経費カードへ反映 */}
@@ -1047,10 +1090,10 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               type="button"
               onClick={() => onSyncSalaryToExpenseCards(activeMonth)}
               className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
-              title="給与計算で出来上がった「役員報酬・給料手当」および「社会保険料・税金納付」のカードを反映・同期します"
+              title="給与計算で出来上がった「役員報酬・給料手当」および「社会保険料・税金納付」のカードを反映・同期し、出納帳の経費合計へ即座に反映します"
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              <span>給与台帳からカードを反映</span>
+              <span>給与台帳からカード＆合計金額に反映</span>
             </button>
           )}
 
@@ -1068,26 +1111,79 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           )}
         </div>
 
-        {/* Subtotal & Batch Submit */}
-        <div className="flex items-center gap-3 justify-between lg:justify-end">
-          <div className="bg-rose-50 border border-rose-100 px-3.5 py-1.5 rounded-xl flex items-center gap-2.5 text-xs">
-            <span className="text-rose-700 font-medium">
-              当月入力計 ({enteredItemsCount}件):
+        {/* Subtotals & Batch Submit */}
+        <div className="flex flex-wrap items-center gap-2.5 justify-between xl:justify-end">
+          {/* Total of All Expense Cards in Month */}
+          <div className="bg-rose-50 border border-rose-200/80 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs shadow-2xs">
+            <span className="text-rose-700 font-medium whitespace-nowrap">
+              当月カード計 ({allCardsEnteredCount}件):
             </span>
             <span className="font-bold font-mono text-rose-900 text-sm">
-              ¥{totalEnteredAmount.toLocaleString()}
+              ¥{totalAllCardsAmount.toLocaleString()}
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleBatchRegister}
-            disabled={totalEnteredAmount <= 0}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>{parseInt(activeMonth.split('-')[1], 10)}月分を一括登録する</span>
-          </button>
+          {/* Filtered Total if activeGroupFilter !== 'ALL' */}
+          {activeGroupFilter !== 'ALL' && (
+            <div className="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 text-xs">
+              <span className="text-slate-600 font-medium whitespace-nowrap">
+                表示中計:
+              </span>
+              <span className="font-bold font-mono text-slate-800 text-sm">
+                ¥{totalEnteredAmount.toLocaleString()}
+              </span>
+            </div>
+          )}
+
+          {/* Registered Ledger Total */}
+          <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs shadow-2xs ${
+            activeMonthRegistered.total > 0 
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}>
+            <span className="font-medium whitespace-nowrap">
+              出納帳 計上済:
+            </span>
+            <span className="font-bold font-mono text-sm">
+              ¥{activeMonthRegistered.total.toLocaleString()}
+            </span>
+            {activeMonthRegistered.total > 0 ? (
+              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold text-[10px]">
+                計上済
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-semibold text-[10px]">
+                未反映
+              </span>
+            )}
+          </div>
+
+          {/* Main Batch Actions */}
+          <div className="flex items-center gap-1.5">
+            {activeGroupFilter !== 'ALL' && (
+              <button
+                type="button"
+                onClick={() => handleBatchRegister(false)}
+                disabled={totalEnteredAmount <= 0}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:pointer-events-none text-slate-800 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                title="現在選択されているグループの品目のみを出納帳へ計上します"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-600" />
+                <span>表示中のみ計上</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleBatchRegister(true)}
+              disabled={totalAllCardsAmount <= 0}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              title="給与・月末支払いを含む当月すべての経費カードを出納帳へ一括計上し、経費合計へ反映します"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>全カードを一括計上</span>
+            </button>
+          </div>
         </div>
       </div>
 

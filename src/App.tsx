@@ -906,29 +906,18 @@ export default function App() {
     saveSettings(updatedSettings);
     syncSaveSettingsToFirestore(updatedSettings);
 
+    // Automatically register transactions to ledger so that total expense amounts across all views (Dashboard, Monthly Progress, PL, Transactions) update immediately!
     if (!silent) {
-      const wantRegister = window.confirm(
-        `✅ 【給与報酬カードを経費カードへ反映しました】\n\n` +
-        `以下の給与・月末支払い内容を経費カードに反映・同期しました：\n\n` +
-        `💳 【3. 給与カード（${settings.salarySettings?.payDay || 25}日振込）】\n` +
-        `・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()}\n` +
-        `・スタッフ給料手当: ¥${summary.totalStaffSalary.toLocaleString()}\n` +
-        `（額面給与計: ¥${summary.totalGross.toLocaleString()}）\n\n` +
-        `🗓️ 【2. 末にまとめて払うものカード】\n` +
-        `・社会保険料納付: ¥${socialInsTotal.toLocaleString()}\n` +
-        `・源泉・住民税納付: ¥${taxesTotal.toLocaleString()}\n` +
-        `・雇用保険会社負担: ¥${laborInsTotal.toLocaleString()}\n\n` +
-        `━━━━━━━━━━━━━━━━━━━━\n` +
-        `【確認】\n` +
-        `この給与・月末支払いを、同時に今すぐ出納帳・試算表の「経費（合計）」にも取引計上しますか？\n\n` +
-        `・「OK」を押す → 今すぐ取引計上され、経費合計やダッシュボードにも即座に反映されます。\n` +
-        `・「キャンセル」を押す → 経費カードへの反映のみ行います（経費カード画面で後から一括登録可能）。`
+      handleRegisterSalaryToTransactions(summary, targetMonth, summary ? undefined : undefined);
+      handleSendMessage(
+        `✅ 【給与・月末支払いを出納帳及び経費カードへ反映しました】\n` +
+        `・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()} (${summary.executiveCount}名)\n` +
+        `・スタッフ給料手当: ¥${summary.totalStaffSalary.toLocaleString()} (${summary.staffCount}名)\n` +
+        `・社会保険料納付（会社+本人）: ¥${socialInsTotal.toLocaleString()}\n` +
+        `・雇用保険会社負担: ¥${laborInsTotal.toLocaleString()}\n` +
+        `・源泉税・住民税納付: ¥${taxesTotal.toLocaleString()}\n` +
+        `経費カードの品目金額、月別進捗、試算表、および出納帳の経費合計金額へ即座に反映されました。`
       );
-
-      if (wantRegister) {
-        handleRegisterSalaryToTransactions(summary, targetMonth);
-        return;
-      }
     }
   };
 
