@@ -311,6 +311,13 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     });
   }, [expenseCards, activeMonth, settings.salarySettings]);
 
+  // Auto-sync salary calculations to cards on month change
+  React.useEffect(() => {
+    if (onSyncSalaryToExpenseCards) {
+      onSyncSalaryToExpenseCards(activeMonth);
+    }
+  }, [activeMonth]);
+
   // Update input dates when month changes
   const handleMonthChange = (newMonth: string) => {
     setActiveMonth(newMonth);
@@ -1064,87 +1071,49 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         </div>
       </div>
 
-      {/* Active Month Quick Action Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-1 bg-rose-100 text-rose-800 font-bold text-xs rounded-lg border border-rose-200">
-              {activeMonth.replace('-', '年 ')}月度 経費カード
-            </span>
-          </div>
+      {/* Active Month Clean Action Bar */}
+      <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-2.5 py-1 bg-rose-50 text-rose-800 font-bold text-xs rounded-lg border border-rose-200">
+            {activeMonth.replace('-', '年 ')}月度 経費カード
+          </span>
 
-          {/* SUPER HELPFUL: COPY PREVIOUS MONTH BUTTON */}
           <button
             type="button"
             onClick={() => handleCopyPreviousMonthData()}
-            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
             title={`毎月重複する経費を前月(${parseInt(prevMonthStr.split('-')[1], 10)}月度)からワンクリックで一括反映します`}
           >
-            <Copy className="w-3.5 h-3.5 text-indigo-600" />
+            <Copy className="w-3.5 h-3.5 text-slate-500" />
             <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) コピー</span>
           </button>
 
-          {/* SYNC SALARY BUTTON: 給与台帳の出来上がりカードを経費カードへ反映 */}
-          {onSyncSalaryToExpenseCards && (
-            <button
-              type="button"
-              onClick={() => onSyncSalaryToExpenseCards(activeMonth)}
-              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
-              title="給与計算で出来上がった「役員報酬・給料手当」および「社会保険料・税金納付」のカードを反映・同期し、出納帳の経費合計へ即座に反映します"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              <span>給与台帳からカード＆合計金額に反映</span>
-            </button>
-          )}
-
-          {/* DIRECT REGISTER SALARY TO TRANSACTIONS */}
-          {onRegisterSalaryToTransactions && (
-            <button
-              type="button"
-              onClick={() => onRegisterSalaryToTransactions(activeMonth)}
-              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
-              title="給与計算結果（役員報酬・給料手当・社会保険料・税金納付）を出納帳・経費取引へ直接計上します"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-              <span>給与・社保を出納帳へ直接計上</span>
-            </button>
-          )}
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold rounded-lg">
+            <Sparkles className="w-3 h-3 text-emerald-600" />
+            給与自動連動中
+          </span>
         </div>
 
-        {/* Subtotals & Batch Submit */}
-        <div className="flex flex-wrap items-center gap-2.5 justify-between xl:justify-end">
-          {/* Total of All Expense Cards in Month */}
-          <div className="bg-rose-50 border border-rose-200/80 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs shadow-2xs">
+        {/* Totals & Batch Submit */}
+        <div className="flex flex-wrap items-center gap-2 justify-between xl:justify-end">
+          {/* Card Total */}
+          <div className="bg-rose-50/70 border border-rose-200 px-3 py-1.5 rounded-xl flex items-center gap-2 text-xs">
             <span className="text-rose-700 font-medium whitespace-nowrap">
-              当月カード計 ({allCardsEnteredCount}件):
+              カード計:
             </span>
             <span className="font-bold font-mono text-rose-900 text-sm">
               ¥{totalAllCardsAmount.toLocaleString()}
             </span>
           </div>
 
-          {/* Filtered Total if activeGroupFilter !== 'ALL' */}
-          {activeGroupFilter !== 'ALL' && (
-            <div className="bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 text-xs">
-              <span className="text-slate-600 font-medium whitespace-nowrap">
-                表示中計:
-              </span>
-              <span className="font-bold font-mono text-slate-800 text-sm">
-                ¥{totalEnteredAmount.toLocaleString()}
-              </span>
-            </div>
-          )}
-
-          {/* Registered Ledger Total */}
-          <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 text-xs shadow-2xs ${
+          {/* Registered Ledger Status */}
+          <div className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 text-xs ${
             activeMonthRegistered.total > 0 
               ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
-              : 'bg-amber-50 border-amber-200 text-amber-900'
+              : 'bg-slate-50 border-slate-200 text-slate-600'
           }`}>
-            <span className="font-medium whitespace-nowrap">
-              出納帳 計上済:
-            </span>
-            <span className="font-bold font-mono text-sm">
+            <span className="font-medium whitespace-nowrap">出納帳:</span>
+            <span className="font-bold font-mono text-xs">
               ¥{activeMonthRegistered.total.toLocaleString()}
             </span>
             {activeMonthRegistered.total > 0 ? (
@@ -1152,20 +1121,20 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                 計上済
               </span>
             ) : (
-              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded font-semibold text-[10px]">
-                未反映
+              <span className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded font-medium text-[10px]">
+                未計上
               </span>
             )}
           </div>
 
-          {/* Main Batch Actions */}
+          {/* Action Button */}
           <div className="flex items-center gap-1.5">
             {activeGroupFilter !== 'ALL' && (
               <button
                 type="button"
                 onClick={() => handleBatchRegister(false)}
                 disabled={totalEnteredAmount <= 0}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:pointer-events-none text-slate-800 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:pointer-events-none text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
                 title="現在選択されているグループの品目のみを出納帳へ計上します"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 text-slate-600" />
@@ -1177,11 +1146,11 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               type="button"
               onClick={() => handleBatchRegister(true)}
               disabled={totalAllCardsAmount <= 0}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
               title="給与・月末支払いを含む当月すべての経費カードを出納帳へ一括計上し、経費合計へ反映します"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>全カードを一括計上</span>
+              <span>{activeMonthRegistered.total > 0 ? '出納帳を最新計上に更新' : '全カードを一括計上'}</span>
             </button>
           </div>
         </div>
@@ -1220,50 +1189,6 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           );
         })}
       </div>
-
-      {/* Salary & Month-End Sync Banner */}
-      {onNavigateToSalary && (
-        <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white p-4 sm:p-5 rounded-3xl shadow-sm border border-emerald-800/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="p-3 bg-emerald-500/20 text-emerald-300 rounded-2xl border border-emerald-400/30 shrink-0">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider text-emerald-300">給与・役員報酬カード連携</span>
-                <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 text-[10px] font-bold rounded-full">自動連携</span>
-              </div>
-              <p className="text-sm font-bold text-white mt-1">
-                出来上がった「役員報酬・給料手当」および月末の「社保・税金納付」を経費カードに反映
-              </p>
-              <p className="text-xs text-emerald-200/80 mt-0.5">
-                給与台帳で計算された結果を「3. 給与」および「2. 末にまとめて払うもの」カードへワンクリックで最新反映・一括計上できます。
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {onSyncSalaryToExpenseCards && (
-              <button
-                type="button"
-                onClick={() => onSyncSalaryToExpenseCards(activeMonth)}
-                className="px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-950 font-black text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                title="給与台帳で計算した最新データを経費カードへ反映します"
-              >
-                <Sparkles className="w-4 h-4 text-emerald-600" />
-                <span>給与台帳からカードを反映</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onNavigateToSalary}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-black text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
-            >
-              <Calculator className="w-4 h-4" />
-              <span>給与・報酬台帳を開く</span>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* VIEW 1: CARD GRID LAYOUT (ユーザー要望のカード型！)                       */}

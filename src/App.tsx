@@ -497,12 +497,25 @@ export default function App() {
     );
   };
 
-  // Handler: Save Salary Employees
+  // Handler: Save Salary Employees (with automatic silent sync to Expense Cards & Transactions)
   const handleSaveSalaryEmployees = (newEmployees: SalaryEmployee[], targetMonth?: string) => {
+    const curMonth = targetMonth || (selectedFilter.includes('-') && selectedFilter.length === 7 ? selectedFilter : new Date().toISOString().substring(0, 7));
     const snapshots = { ...(settings.monthlySalarySnapshots || {}) };
-    if (targetMonth) {
-      snapshots[targetMonth] = newEmployees;
-    }
+    snapshots[curMonth] = newEmployees;
+
+    const salarySettings = settings.salarySettings || {
+      payDay: 25,
+      monthEndPayDay: 0,
+      healthInsuranceRate: 0.05,
+      careInsuranceRate: 0.008,
+      pensionRate: 0.0915,
+      empInsuranceEmployeeRate: 0.006,
+      empInsuranceCompanyRate: 0.0095,
+      childContributionRate: 0.0036,
+    };
+    const results = newEmployees.map(e => calculateEmployeeSalary(e, salarySettings));
+    const summary = calculateTotalSalarySummary(results);
+
     const updated: AppSettings = {
       ...settings,
       salaryEmployees: newEmployees,
@@ -511,9 +524,12 @@ export default function App() {
     setSettings(updated);
     saveSettings(updated);
     syncSaveSettingsToFirestore(updated);
+
+    // Automatically sync expense cards AND update ledger transactions quietly (no button push needed!)
+    handleRegisterSalaryToTransactions(summary, curMonth, results, true);
   };
 
-  // Handler: Save Salary Settings
+  // Handler: Save Salary Settings (with automatic silent recalculation)
   const handleSaveSalarySettings = (newSalarySettings: SalarySettings) => {
     const updated: AppSettings = {
       ...settings,
@@ -522,13 +538,22 @@ export default function App() {
     setSettings(updated);
     saveSettings(updated);
     syncSaveSettingsToFirestore(updated);
+
+    const curMonth = selectedFilter.includes('-') && selectedFilter.length === 7 ? selectedFilter : new Date().toISOString().substring(0, 7);
+    const emps = (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[curMonth]) || settings.salaryEmployees || [];
+    if (emps.length > 0) {
+      const results = emps.map(e => calculateEmployeeSalary(e, newSalarySettings));
+      const summary = calculateTotalSalarySummary(results);
+      handleRegisterSalaryToTransactions(summary, curMonth, results, true);
+    }
   };
 
   // Handler: Register Salary and Month-End Payments to Transactions
   const handleRegisterSalaryToTransactions = (
     payloadOrSummary: any,
     secondArgTargetMonth?: string,
-    thirdArgResults?: SalaryCalculationResult[]
+    thirdArgResults?: SalaryCalculationResult[],
+    silent: boolean = false
   ) => {
     let targetMonth: string;
     let payDate: string;
@@ -719,18 +744,20 @@ export default function App() {
     // Automatically sync salary & month-end cards to expense cards as well!
     handleSyncSalaryToExpenseCards(summary, targetMonth, true);
 
-    const totalCost = summary.totalCompanyCost;
-    handleSendMessage(
-      `💼 【給与＆月末支払い計上】${targetMonth}月分の給与（役員報酬/給料手当）および【末の支払い（社保会社+本人合算納付 ¥${socialInsPayment.toLocaleString()}等）】計 ${newTxList.length} 件を一括計上しました。（会社総人件費: ¥${totalCost.toLocaleString()}）`
-    );
+    if (!silent) {
+      const totalCost = summary.totalCompanyCost;
+      handleSendMessage(
+        `💼 【給与＆月末支払い計上】${targetMonth}月分の給与（役員報酬/給料手当）および【末の支払い（社保会社+本人合算納付 ¥${socialInsPayment.toLocaleString()}等）】計 ${newTxList.length} 件を一括計上しました。（会社総人件費: ¥${totalCost.toLocaleString()}）`
+      );
 
-    alert(
-      `✅ 【給与＆月末支払いの計上完了】\n${targetMonth}月分として計 ${newTxList.length} 件の取引データを登録しました！\n\n` +
-      `① 25日支給分:\n・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()}\n・給料手当: ¥${summary.totalStaffSalary.toLocaleString()}\n・手取り振込計: ¥${summary.totalNetSalary.toLocaleString()}\n\n` +
-      `② 月末の支払い納付分:\n・社会保険料 (会社負担+本人預り合算): ¥${socialInsPayment.toLocaleString()}\n・税金納付 (源泉+住民税): ¥${taxPayment.toLocaleString()}\n・雇用保険会社分: ¥${laborInsPayment.toLocaleString()}\n\n` +
-      `★ 月末の支払い合計: ¥${summary.monthEndSummary.totalMonthEndPayment.toLocaleString()}\n\n` +
-      `※経費カード画面にも、出来上がった給与報酬カード（役員報酬・給料手当・社保納付）を自動反映しました！`
-    );
+      alert(
+        `✅ 【給与＆月末支払いの計上完了】\n${targetMonth}月分として計 ${newTxList.length} 件の取引データを登録しました！\n\n` +
+        `① 25日支給分:\n・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()}\n・給料手当: ¥${summary.totalStaffSalary.toLocaleString()}\n・手取り振込計: ¥${summary.totalNetSalary.toLocaleString()}\n\n` +
+        `② 月末の支払い納付分:\n・社会保険料 (会社負担+本人預り合算): ¥${socialInsPayment.toLocaleString()}\n・税金納付 (源泉+住民税): ¥${taxPayment.toLocaleString()}\n・雇用保険会社分: ¥${laborInsPayment.toLocaleString()}\n\n` +
+        `★ 月末の支払い合計: ¥${summary.monthEndSummary.totalMonthEndPayment.toLocaleString()}\n\n` +
+        `※経費カード画面にも、出来上がった給与報酬カード（役員報酬・給料手当・社保納付）を自動反映しました！`
+      );
+    }
   };
 
   // Handler: Sync Salary & Month-End Cards to Expense Cards (給与報酬出来上がりカードを経費カードへ反映)

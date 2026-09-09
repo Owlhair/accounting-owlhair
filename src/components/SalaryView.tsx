@@ -709,72 +709,56 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
         </div>
       </div>
 
-      {/* Salary Copy & Smart Duplication Action Bar */}
-      <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 border border-emerald-200 rounded-2xl p-3 sm:p-4 shadow-2xs">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-xs shrink-0 mt-0.5 sm:mt-0">
-              <Copy className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-black text-emerald-950">
-                  給与データ引き継ぎ・コピー機能
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-white text-emerald-800 rounded-md border border-emerald-300">
-                  {formatMonthLabel(activeMonth)} 給与分
-                </span>
-                {monthRegistrationStatus.isSalaryRegistered ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-600 text-white rounded-md shadow-2xs flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    今月分は計上済
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-medium px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md border border-amber-300/80">
-                    今月分は未計上
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-emerald-800/90 mt-1">
-                役員報酬やスタッフ給与は基本的に毎月変わりません。前月（<strong>{formatMonthLabel(prevMonth)}</strong>）の内容を1クリックでそのまま今月にコピーしたり、同額で即座に取引計上できます。
-              </p>
-            </div>
-          </div>
+      {/* Clean Unified Action Bar */}
+      <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 font-bold text-xs rounded-lg border border-emerald-200">
+            {formatMonthLabel(activeMonth)} 給与・報酬
+          </span>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0 pt-1 lg:pt-0">
-            {/* 1. 前月からコピー */}
-            <button
-              type="button"
-              onClick={handleCopyFromPrevMonth}
-              className="px-3.5 py-2 bg-white hover:bg-emerald-50 text-emerald-900 text-xs font-black rounded-xl border border-emerald-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-              title={`前月（${formatMonthLabel(prevMonth)}）のメンバー・給料・手当を当月にコピー`}
-            >
-              <Copy className="w-3.5 h-3.5 text-emerald-700" />
-              <span>前月（{formatMonthLabel(prevMonth)}）からコピー</span>
-            </button>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium rounded-lg">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>経費カード＆出納帳へ自動連動中</span>
+          </span>
 
-            {/* 2. 他月からコピー */}
-            <button
-              type="button"
-              onClick={() => setIsCopyModalOpen(true)}
-              className="px-3 py-2 bg-emerald-100/90 hover:bg-emerald-200/90 text-emerald-900 text-xs font-bold rounded-xl border border-emerald-300/80 transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="過去の任意の月から選んでコピー"
-            >
-              <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-              <span>他月からコピー...</span>
-            </button>
+          {monthRegistrationStatus.isSalaryRegistered && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-semibold rounded-md">
+              <Check className="w-3 h-3 text-emerald-700" />
+              出納帳 計上済
+            </span>
+          )}
+        </div>
 
-            {/* 3. 前月と同額で一発登録 */}
-            <button
-              type="button"
-              onClick={handleRegisterSameAsPrevMonth}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-              title={`前月と同額で当月（${formatMonthLabel(activeMonth)}）の役員報酬・給料手当・月末社保納付を一括計上`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>前月と同額で一発登録</span>
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCopyFromPrevMonth}
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            title={`前月（${formatMonthLabel(prevMonth)}）のメンバー・給料・手当を当月にコピー`}
+          >
+            <Copy className="w-3.5 h-3.5 text-slate-500" />
+            <span>前月（{formatMonthLabel(prevMonth)}）コピー</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCopyModalOpen(true)}
+            className="px-2.5 py-1.5 text-slate-600 hover:text-slate-900 text-xs font-medium rounded-xl hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer"
+            title="過去の任意の月から選んでコピー"
+          >
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <span>他月からコピー...</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExecuteRegistration}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+            title="出納帳・経費取引データを今すぐ最新内容で再反映"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>出納帳へ再反映</span>
+          </button>
         </div>
       </div>
 
@@ -865,67 +849,6 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
               源泉税+住民税: <strong className="text-gray-800 font-mono">¥{(summary.monthEndSummary.withholdingTaxPayment + summary.monthEndSummary.residentTaxPayment).toLocaleString()}</strong>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Action Banner: 末の支払いへの自動投入・経費登録 */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-bold text-amber-300">
-              ワンクリック連動システム
-            </span>
-            {monthRegistrationStatus.isSalaryRegistered && (
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 rounded-md">
-                当月給与計上済
-              </span>
-            )}
-            {monthRegistrationStatus.isMonthEndRegistered && (
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/30 text-rose-300 border border-rose-500/50 rounded-md">
-                月末納付計上済
-              </span>
-            )}
-          </div>
-          <h2 className="text-base sm:text-lg font-bold">
-            {activeMonth.replace('-', '年 ')}月分の給与と「末の支払い（社保・税金納付）」を一括登録
-          </h2>
-          <p className="text-xs text-slate-300 max-w-2xl">
-            支給日（{salarySettings.payDay}日）に役員報酬・給料手当を計上し、月末（末日）に社保会社負担＋本人分合計の「法定福利費・預り金納付」を経費・取引データへ自動投入します。
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={handleRegisterSameAsPrevMonth}
-            className="px-3.5 py-2.5 text-xs font-bold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-            title={`前月（${formatMonthLabel(prevMonth)}）と同額で今月の給与・月末支払いを一発計上`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>前月と同額で一発登録</span>
-          </button>
-
-          {onSyncToMonthEndExpenseCard && (
-            <button
-              type="button"
-              onClick={() => onSyncToMonthEndExpenseCard(summary, activeMonth)}
-              className="px-3.5 py-2.5 text-xs font-bold text-white bg-indigo-600/80 hover:bg-indigo-600 border border-indigo-400/40 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-              title="給与画面で出来上がった「役員報酬・給料手当（3. 給与カード）」および「社会保険料・税金納付（2. 末払いカード）」を経費カードに自動反映します"
-            >
-              <CreditCard className="w-4 h-4 text-indigo-200" />
-              <span>給与カードを経費カードへ反映</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleExecuteRegistration}
-            className="px-4 py-2.5 text-xs font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer font-sans"
-          >
-            <CheckCircle2 className="w-4 h-4 text-slate-900" />
-            <span>給与・月末支払いを今すぐ一括登録</span>
-          </button>
         </div>
       </div>
 
