@@ -525,14 +525,41 @@ export default function App() {
   };
 
   // Handler: Register Salary and Month-End Payments to Transactions
-  const handleRegisterSalaryToTransactions = (payload: {
-    targetMonth: string;
-    payDate: string;
-    monthEndDate: string;
-    summary: SalaryTotalSummary;
-    results: SalaryCalculationResult[];
-  }) => {
-    const { targetMonth, payDate, monthEndDate, summary, results } = payload;
+  const handleRegisterSalaryToTransactions = (
+    payloadOrSummary: any,
+    secondArgTargetMonth?: string,
+    thirdArgResults?: SalaryCalculationResult[]
+  ) => {
+    let targetMonth: string;
+    let payDate: string;
+    let monthEndDate: string;
+    let summary: SalaryTotalSummary;
+    let results: SalaryCalculationResult[] = [];
+
+    if (payloadOrSummary && typeof payloadOrSummary === 'object' && 'targetMonth' in payloadOrSummary) {
+      targetMonth = payloadOrSummary.targetMonth;
+      summary = payloadOrSummary.summary;
+      results = payloadOrSummary.results || [];
+      const [yearStr, monthStr] = targetMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const payDay = settings.salarySettings?.payDay || 25;
+      payDate = payloadOrSummary.payDate || `${targetMonth}-${String(payDay).padStart(2, '0')}`;
+      const lastDay = new Date(year, month, 0).getDate();
+      monthEndDate = payloadOrSummary.monthEndDate || `${targetMonth}-${String(lastDay).padStart(2, '0')}`;
+    } else {
+      summary = payloadOrSummary as SalaryTotalSummary;
+      targetMonth = secondArgTargetMonth || new Date().toISOString().substring(0, 7);
+      results = thirdArgResults || [];
+      const [yearStr, monthStr] = targetMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const payDay = settings.salarySettings?.payDay || 25;
+      payDate = `${targetMonth}-${String(payDay).padStart(2, '0')}`;
+      const lastDay = new Date(year, month, 0).getDate();
+      monthEndDate = `${targetMonth}-${String(lastDay).padStart(2, '0')}`;
+    }
+
     const timestamp = new Date().toISOString();
     const newTxList: Transaction[] = [];
 
@@ -666,7 +693,23 @@ export default function App() {
     }
 
     setTransactions((prev) => {
-      const updated = [...newTxList, ...prev];
+      // Clean up previous salary transactions for the same targetMonth if any so re-registering cleanly replaces
+      const filtered = prev.filter(t => !(
+        t.type === 'expense' &&
+        (
+          t.id.startsWith(`tx-sal-`) ||
+          t.description.includes(`${targetMonth}分 役員報酬`) ||
+          t.description.includes(`${targetMonth}分 給料手当`) ||
+          t.description.includes(`${targetMonth}分 社会保険料`) ||
+          t.description.includes(`${targetMonth}分 雇用保険`) ||
+          t.description.includes(`${targetMonth}分 源泉所得税`)
+        ) &&
+        (
+          (t.date_from && t.date_from.startsWith(targetMonth)) ||
+          t.description.includes(`${targetMonth}分`)
+        )
+      ));
+      const updated = [...newTxList, ...filtered];
       saveTransactions(updated);
       return updated;
     });
@@ -846,6 +889,7 @@ export default function App() {
     }
 
     monthEndCard.subItems = existingSubItems;
+    monthEndCard.defaultAmount = summary.monthEndSummary.totalMonthEndPayment;
 
     const updatedCards = currentCards.map(c => {
       if (c.id === salaryCard!.id) return salaryCard!;
@@ -863,19 +907,28 @@ export default function App() {
     syncSaveSettingsToFirestore(updatedSettings);
 
     if (!silent) {
-      alert(
-        `✅ 【給与報酬カードを経費カードへ反映完了】\n\n` +
+      const wantRegister = window.confirm(
+        `✅ 【給与報酬カードを経費カードへ反映しました】\n\n` +
         `以下の給与・月末支払い内容を経費カードに反映・同期しました：\n\n` +
         `💳 【3. 給与カード（${settings.salarySettings?.payDay || 25}日振込）】\n` +
         `・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()}\n` +
         `・スタッフ給料手当: ¥${summary.totalStaffSalary.toLocaleString()}\n` +
-        `（額面総支給額計: ¥${summary.totalGross.toLocaleString()} / 手取り計: ¥${summary.totalNetSalary.toLocaleString()}）\n\n` +
+        `（額面給与計: ¥${summary.totalGross.toLocaleString()}）\n\n` +
         `🗓️ 【2. 末にまとめて払うものカード】\n` +
-        `・社会保険料納付 (会社負担+本人分合算): ¥${socialInsTotal.toLocaleString()}\n` +
-        `・源泉所得税・住民税納付: ¥${taxesTotal.toLocaleString()}\n` +
-        `・雇用保険会社負担分: ¥${laborInsTotal.toLocaleString()}\n\n` +
-        `「経費カード」画面を開くと、出来上がったカードがそのまま表示・一括計上できるようになっています！`
+        `・社会保険料納付: ¥${socialInsTotal.toLocaleString()}\n` +
+        `・源泉・住民税納付: ¥${taxesTotal.toLocaleString()}\n` +
+        `・雇用保険会社負担: ¥${laborInsTotal.toLocaleString()}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━\n` +
+        `【確認】\n` +
+        `この給与・月末支払いを、同時に今すぐ出納帳・試算表の「経費（合計）」にも取引計上しますか？\n\n` +
+        `・「OK」を押す → 今すぐ取引計上され、経費合計やダッシュボードにも即座に反映されます。\n` +
+        `・「キャンセル」を押す → 経費カードへの反映のみ行います（経費カード画面で後から一括登録可能）。`
       );
+
+      if (wantRegister) {
+        handleRegisterSalaryToTransactions(summary, targetMonth);
+        return;
+      }
     }
   };
 
@@ -1097,6 +1150,22 @@ export default function App() {
               const results = emps.map(e => calculateEmployeeSalary(e, salarySettings));
               const summary = calculateTotalSalarySummary(results);
               handleSyncSalaryToExpenseCards(summary, targetMonth);
+            }}
+            onRegisterSalaryToTransactions={(targetMonth) => {
+              const emps = (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth]) || settings.salaryEmployees || [];
+              const salarySettings = settings.salarySettings || {
+                payDay: 25,
+                monthEndPayDay: 0,
+                healthInsuranceRate: 0.05,
+                careInsuranceRate: 0.008,
+                pensionRate: 0.0915,
+                empInsuranceEmployeeRate: 0.006,
+                empInsuranceCompanyRate: 0.0095,
+                childContributionRate: 0.0036,
+              };
+              const results = emps.map(e => calculateEmployeeSalary(e, salarySettings));
+              const summary = calculateTotalSalarySummary(results);
+              handleRegisterSalaryToTransactions(summary, targetMonth, results);
             }}
           />
         )}
