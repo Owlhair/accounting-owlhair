@@ -98,6 +98,7 @@ interface SalaryViewProps {
     results: SalaryCalculationResult[];
   }) => void;
   onSyncToMonthEndExpenseCard?: (summary: SalaryTotalSummary, targetMonth: string) => void;
+  onOpenHealingLounge?: () => void;
 }
 
 export const SalaryView: React.FC<SalaryViewProps> = ({
@@ -110,6 +111,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   onSaveSalarySettings,
   onRegisterSalaryToTransactions,
   onSyncToMonthEndExpenseCard,
+  onOpenHealingLounge,
 }) => {
   // Current active fiscal period (matches StoreSalesCardBoard & ExpenseCardsView)
   const currentPeriod = useMemo(() => {
@@ -778,14 +780,29 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
           </span>
 
           {monthRegistrationStatus.isSalaryRegistered && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-semibold rounded-md">
-              <Check className="w-3 h-3 text-emerald-700" />
-              出納帳 計上済
+            <span 
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-300"
+              title="計上後でも扶養人数や給与・控除は自由に変更できます。変更内容は出納帳へ自動で上書き更新されます"
+            >
+              <Check className="w-3.5 h-3.5 text-emerald-700" />
+              <span>出納帳 計上済（いつでも変更・更新可）</span>
             </span>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenHealingLounge && (
+            <button
+              type="button"
+              onClick={onOpenHealingLounge}
+              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              title="給与計算お疲れ様です！ほっこり休憩室で一息つきませんか？"
+            >
+              <span>🍵</span>
+              <span>ほっこり一息</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleCopyFromPrevMonth}
@@ -1857,13 +1874,61 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                     </div>
                   </div>
 
+                  {/* 扶養親族等の数（所得税の計算に直結） */}
+                  <div className="flex items-center justify-between p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-950">扶養親族等の数</span>
+                        <span className="text-[10px] text-emerald-800 bg-white border border-emerald-300 px-1.5 py-0.2 rounded font-bold">
+                          所得税控除の対象
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-emerald-800">
+                        ※人数を増やすと源泉所得税が安くなり、手取り振込額が増加します（計上後も自由に変更可）
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center border border-emerald-300 rounded-lg bg-white overflow-hidden shadow-2xs">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateDependentsCount(currentEmp.id, Math.max(0, (currentEmp.dependentsCount || 0) - 1))}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold transition-colors cursor-pointer text-xs"
+                          title="扶養人数を減らす"
+                        >
+                          －
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          max="15"
+                          value={currentEmp.dependentsCount || 0}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value, 10);
+                            handleUpdateDependentsCount(currentEmp.id, isNaN(parsed) ? 0 : parsed);
+                          }}
+                          className="w-10 text-center text-xs font-black bg-transparent focus:outline-hidden py-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateDependentsCount(currentEmp.id, (currentEmp.dependentsCount || 0) + 1)}
+                          className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold transition-colors cursor-pointer text-xs"
+                          title="扶養人数を増やす"
+                        >
+                          ＋
+                        </button>
+                      </div>
+                      <span className="text-xs text-emerald-900 font-bold">名</span>
+                    </div>
+                  </div>
+
                   {/* 源泉所得税 */}
                   <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="font-bold text-slate-800">源泉所得税</span>
                         <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium">
-                          扶養親族 {currentEmp.dependentsCount || 0}名適用
+                          扶養 {currentEmp.dependentsCount || 0}名 適用済
                         </span>
                       </div>
                       <span className="text-[11px] text-slate-500">

@@ -38,6 +38,7 @@ interface NavbarProps {
   isCloudConnected?: boolean;
   isCloudSyncing?: boolean;
   onManualCloudSync?: () => void;
+  onOpenHealingLounge?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -55,6 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isCloudConnected = true,
   isCloudSyncing = false,
   onManualCloudSync,
+  onOpenHealingLounge,
 }) => {
   const activeFileName = getActiveFileName();
   return (
@@ -216,6 +218,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
               <span className={`w-1.5 h-1.5 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
             </button>
+
+            {/* Cozy Healing Lounge Button */}
+            {onOpenHealingLounge && (
+              <button
+                type="button"
+                onClick={onOpenHealingLounge}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50/90 hover:bg-amber-100/90 border border-amber-200 text-amber-900 rounded-xl text-[11px] font-bold shadow-2xs transition-all cursor-pointer active:scale-95"
+                title="ほっこり休憩室（癒しの相棒カフェ）を開く"
+              >
+                <span>🍵</span>
+                <span className="hidden sm:inline">ほっこり休憩</span>
+              </button>
+            )}
 
             <button
               type="button"
