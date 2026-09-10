@@ -102,11 +102,9 @@ export interface SalaryEmployee {
   residentTax: number;             // 住民税（毎月の特別徴収額）
   memo?: string;                   // 備考・口座情報など
   isActive: boolean;               // 在籍中（オン/オフ）
-  standardMonthlyRemuneration?: number; // 標準報酬月額（未設定時は給与額から自動算定）
-  // 手動微調整（給与明細や決定通知書の確定金額で1円単位で上書きしたい場合）
+  // 手動微調整（決定通知書の確定金額で上書きしたい場合）
   customOverrides?: {
     healthInsurance?: number;      // 健保本人負担
-    careInsurance?: number;        // 介護保険本人負担
     welfarePension?: number;       // 厚年本人負担
     employmentInsurance?: number;  // 雇用保険本人負担
     incomeTax?: number;            // 源泉所得税
@@ -116,7 +114,6 @@ export interface SalaryEmployee {
 export interface SalarySettings {
   payDay: number;                  // 給与支給日（例: 25日）
   monthEndPayDay: number;          // 月末支払日（例: 月末=0 または 翌月末等）
-  prefecture?: string;             // 協会けんぽ都道府県（例: 福岡県、東京都）
   // 料率設定（標準プリセットあり）
   healthInsuranceRate: number;     // 健保折半率（例: 0.05 = 5.0%）
   careInsuranceRate: number;       // 介護折半率（例: 0.008 = 0.8%）

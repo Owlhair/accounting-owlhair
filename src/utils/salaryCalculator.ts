@@ -110,96 +110,27 @@ export function getStandardMonthlyRemuneration(grossSalary: number): number {
 }
 
 /**
- * 協会けんぽ 都道府県別健康保険料率（令和6年度〜令和7年度 労使折半率）
- */
-export const PREFECTURE_HEALTH_RATES: Record<string, { label: string; rate: number; fullRate: string }> = {
-  '福岡県': { label: '福岡県 (折半 5.135% / 全体 10.27%)', rate: 0.05135, fullRate: '10.27%' },
-  '東京都': { label: '東京都 (折半 4.99% / 全体 9.98%)', rate: 0.0499, fullRate: '9.98%' },
-  '大阪府': { label: '大阪府 (折半 5.17% / 全体 10.34%)', rate: 0.0517, fullRate: '10.34%' },
-  '神奈川県': { label: '神奈川県 (折半 5.01% / 全体 10.02%)', rate: 0.0501, fullRate: '10.02%' },
-  '愛知県': { label: '愛知県 (折半 4.98% / 全体 9.96%)', rate: 0.0498, fullRate: '9.96%' },
-  '埼玉県': { label: '埼玉県 (折半 4.89% / 全体 9.78%)', rate: 0.0489, fullRate: '9.78%' },
-  '千葉県': { label: '千葉県 (折半 4.93% / 全体 9.86%)', rate: 0.0493, fullRate: '9.86%' },
-  '兵庫県': { label: '兵庫県 (折半 5.17% / 全体 10.34%)', rate: 0.0517, fullRate: '10.34%' },
-  '北海道': { label: '北海道 (折半 5.14% / 全体 10.28%)', rate: 0.0514, fullRate: '10.28%' },
-  '佐賀県': { label: '佐賀県 (折半 5.255% / 全体 10.51%)', rate: 0.05255, fullRate: '10.51%' },
-  '熊本県': { label: '熊本県 (折半 5.145% / 全体 10.29%)', rate: 0.05145, fullRate: '10.29%' },
-  '全国平均': { label: '全国平均目安 (折半 5.00% / 全体 10.00%)', rate: 0.05, fullRate: '10.00%' },
-};
-
-/**
- * 国税庁 給与所得の源泉徴収税額表（月額表・甲欄）の精密算定
+ * 国税庁 月額源泉徴収税額表（甲欄）の概算算定
  * @param taxableGross 課税対象額（総支給額 - 非課税手当 - 社会保険料控除計 - 雇用保険控除）
- * @param dependents 扶養親族等の数（0人〜）
+ * @param dependents 扶養親族等の数
  */
-export function calculateWithholdingTax(taxableGross: number, dependents: number): number {
+export function estimateWithholdingTax(taxableGross: number, dependents: number): number {
   if (taxableGross < 88000) return 0;
 
-  // 扶養親族等の数（安全に0以上）
-  const depCount = Math.max(0, Math.min(15, dependents || 0));
+  // 扶養1人につき控除額約33,000円相当を軽減
+  const effectiveBase = Math.max(0, taxableGross - dependents * 33300);
 
-  // 1. 扶養親族0人の基準税額の算定（国税庁 月額表・甲欄準拠）
-  let taxZero = 0;
-  if (taxableGross < 89000) taxZero = 130;
-  else if (taxableGross < 90000) taxZero = 160;
-  else if (taxableGross < 91000) taxZero = 200;
-  else if (taxableGross < 93000) taxZero = 280;
-  else if (taxableGross < 95000) taxZero = 360;
-  else if (taxableGross < 97000) taxZero = 440;
-  else if (taxableGross < 99000) taxZero = 520;
-  else if (taxableGross < 101000) taxZero = 600;
-  else if (taxableGross < 103000) taxZero = 720;
-  else if (taxableGross < 105000) taxZero = 840;
-  else if (taxableGross < 107000) taxZero = 960;
-  else if (taxableGross < 109000) taxZero = 1080;
-  else if (taxableGross < 111000) taxZero = 1200;
-  else if (taxableGross < 113000) taxZero = 1320;
-  else if (taxableGross < 115000) taxZero = 1440;
-  else if (taxableGross < 117000) taxZero = 1560;
-  else if (taxableGross < 120000) taxZero = 1740;
-  else if (taxableGross < 125000) taxZero = 2040;
-  else if (taxableGross < 130000) taxZero = 2340;
-  else if (taxableGross < 140000) taxZero = 2790;
-  else if (taxableGross < 150000) taxZero = 3250;
-  else if (taxableGross < 160000) taxZero = 3710;
-  else if (taxableGross < 170000) taxZero = 4170;
-  else if (taxableGross < 180000) taxZero = 4630;
-  else if (taxableGross < 190000) taxZero = 5090;
-  else if (taxableGross < 200000) taxZero = 5550;
-  else if (taxableGross < 210000) taxZero = 6010;
-  else if (taxableGross < 220000) taxZero = 6470;
-  else if (taxableGross < 230000) taxZero = 6930;
-  else if (taxableGross < 240000) taxZero = 7390;
-  else if (taxableGross < 250000) taxZero = 7850;
-  else if (taxableGross < 260000) taxZero = 8310;
-  else if (taxableGross < 280000) taxZero = 9230;
-  else if (taxableGross < 300000) taxZero = 10150;
-  else if (taxableGross < 350000) {
-    taxZero = 10150 + Math.floor((taxableGross - 300000) * 0.0736);
-  } else if (taxableGross < 400000) {
-    taxZero = 13830 + Math.floor((taxableGross - 350000) * 0.103);
-  } else if (taxableGross < 500000) {
-    taxZero = 18990 + Math.floor((taxableGross - 400000) * 0.103);
-  } else if (taxableGross < 700000) {
-    taxZero = 29310 + Math.floor((taxableGross - 500000) * 0.139);
-  } else {
-    taxZero = 57090 + Math.floor((taxableGross - 700000) * 0.204);
-  }
-
-  // 2. 扶養親族等の数による軽減額（国税庁 月額表・甲欄基準）
-  // 扶養親族1人あたり、所得税率5%帯では月約1,590円、10%帯では月約2,580円、20%帯では月約5,170円控除
-  let deductionPerDependent = 1590;
-  if (taxableGross >= 700000) {
-    deductionPerDependent = 5170;
-  } else if (taxableGross >= 350000) {
-    deductionPerDependent = 2580;
-  }
-
-  const finalTax = Math.max(0, taxZero - depCount * deductionPerDependent);
-  return finalTax;
+  if (effectiveBase < 88000) return 0;
+  if (effectiveBase < 100000) return Math.floor((effectiveBase - 88000) * 0.035) + 120;
+  if (effectiveBase < 150000) return Math.floor(1000 + (effectiveBase - 100000) * 0.045);
+  if (effectiveBase < 200000) return Math.floor(3250 + (effectiveBase - 150000) * 0.05);
+  if (effectiveBase < 250000) return Math.floor(5750 + (effectiveBase - 200000) * 0.055);
+  if (effectiveBase < 300000) return Math.floor(8500 + (effectiveBase - 250000) * 0.06);
+  if (effectiveBase < 400000) return Math.floor(11500 + (effectiveBase - 300000) * 0.075);
+  if (effectiveBase < 500000) return Math.floor(19000 + (effectiveBase - 400000) * 0.10);
+  if (effectiveBase < 700000) return Math.floor(29000 + (effectiveBase - 500000) * 0.13);
+  return Math.floor(55000 + (effectiveBase - 700000) * 0.20);
 }
-
-export const estimateWithholdingTax = calculateWithholdingTax;
 
 /**
  * 単一従業員/役員の給与・会社負担・月末支払いの精密自動計算
@@ -227,29 +158,19 @@ export function calculateEmployeeSalary(
   let companyChildContribution = 0;
 
   if (employee.hasSocialInsurance) {
-    // 標準報酬月額（直接指定があれば優先、なければ総支給額から算定）
-    const stdRemuneration =
-      employee.standardMonthlyRemuneration && employee.standardMonthlyRemuneration > 0
-        ? employee.standardMonthlyRemuneration
-        : getStandardMonthlyRemuneration(grossSalary);
+    const stdRemuneration = getStandardMonthlyRemuneration(grossSalary);
 
-    // 健康保険（本人分）
+    // 本人分
     if (employee.customOverrides?.healthInsurance !== undefined) {
       healthInsurance = employee.customOverrides.healthInsurance;
     } else {
       healthInsurance = Math.floor(stdRemuneration * settings.healthInsuranceRate);
     }
 
-    // 介護保険（本人分）
     if (employee.hasCareInsurance) {
-      if (employee.customOverrides?.careInsurance !== undefined) {
-        careInsurance = employee.customOverrides.careInsurance;
-      } else {
-        careInsurance = Math.floor(stdRemuneration * settings.careInsuranceRate);
-      }
+      careInsurance = Math.floor(stdRemuneration * settings.careInsuranceRate);
     }
 
-    // 厚生年金（本人分）
     if (employee.customOverrides?.welfarePension !== undefined) {
       welfarePension = employee.customOverrides.welfarePension;
     } else {

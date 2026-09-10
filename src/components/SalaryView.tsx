@@ -30,8 +30,7 @@ import {
   RefreshCw,
   Clock,
   LayoutGrid,
-  List,
-  Sliders
+  List
 } from 'lucide-react';
 import { 
   SalaryEmployee, 
@@ -47,9 +46,7 @@ import {
   calculateEmployeeSalary, 
   calculateTotalSalarySummary, 
   DEFAULT_SALARY_SETTINGS,
-  SalaryTotalSummary,
-  PREFECTURE_HEALTH_RATES,
-  getStandardMonthlyRemuneration
+  SalaryTotalSummary 
 } from '../utils/salaryCalculator';
 
 // Format YYYY-MM to Japanese display (例: "2025年8月")
@@ -226,7 +223,6 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState<string>(prevMonth);
-  const [overrideModalEmployee, setOverrideModalEmployee] = useState<SalaryEmployee | null>(null);
   const [activeTabSubView, setActiveTabSubView] = useState<'cards' | 'table'>('cards');
   const [storeFilter, setStoreFilter] = useState<string>('ALL');
 
@@ -349,59 +345,6 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
     const updated = employees.map(emp => {
       if (emp.id === empId) {
         return { ...emp, dependentsCount: safeCount };
-      }
-      return emp;
-    });
-    saveEmployees(updated);
-  };
-
-  // Helper: update single override or clear
-  const handleUpdateCustomOverride = (
-    empId: string,
-    field: 'healthInsurance' | 'careInsurance' | 'welfarePension' | 'employmentInsurance' | 'incomeTax',
-    value: number | undefined
-  ) => {
-    const updated = employees.map(emp => {
-      if (emp.id === empId) {
-        const nextOverrides = { ...(emp.customOverrides || {}) };
-        if (value === undefined || isNaN(value) || value < 0) {
-          delete nextOverrides[field];
-        } else {
-          nextOverrides[field] = value;
-        }
-        return {
-          ...emp,
-          customOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined
-        };
-      }
-      return emp;
-    });
-    saveEmployees(updated);
-  };
-
-  // Helper: clear all overrides for an employee
-  const handleClearAllOverrides = (empId: string) => {
-    const updated = employees.map(emp => {
-      if (emp.id === empId) {
-        return {
-          ...emp,
-          standardMonthlyRemuneration: undefined,
-          customOverrides: undefined,
-        };
-      }
-      return emp;
-    });
-    saveEmployees(updated);
-  };
-
-  // Helper: update standard monthly remuneration
-  const handleUpdateStandardRemuneration = (empId: string, value: number | undefined) => {
-    const updated = employees.map(emp => {
-      if (emp.id === empId) {
-        return {
-          ...emp,
-          standardMonthlyRemuneration: value && value > 0 ? value : undefined,
-        };
       }
       return emp;
     });
@@ -1239,77 +1182,31 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                         />
                       </div>
                     </div>
-
-                    {/* 扶養についての丁寧な解説バッジ */}
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 bg-slate-100/80 px-2 py-1 rounded-lg">
-                      <span className="flex items-center gap-1">
-                        <span className="text-emerald-700 font-bold">💡 扶養控除:</span>
-                        <span>所得税を軽減し手取り額を増やします（社保・雇保は扶養に関わらず同額）</span>
-                      </span>
-                      {(emp.dependentsCount || 0) > 0 && (
-                        <span className="font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.2 rounded shrink-0">
-                          {emp.dependentsCount}名控除適用
-                        </span>
-                      )}
-                    </div>
                   </div>
 
                   {/* Section 3: 自動計算結果 (本人控除 & 手取り) */}
                   <div className="bg-slate-50 p-3 rounded-xl border border-gray-200/70 space-y-1.5 text-xs">
                     <div className="font-bold text-gray-700 flex items-center justify-between pb-1 border-b border-gray-200">
-                      <div className="flex items-center gap-1.5">
-                        <span>本人控除（天引き預り金）の内訳</span>
-                        {((emp.customOverrides && Object.keys(emp.customOverrides).length > 0) || (emp.standardMonthlyRemuneration && emp.standardMonthlyRemuneration > 0)) && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 bg-amber-100 text-amber-800 border border-amber-300 rounded">
-                            手動上書き中
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setOverrideModalEmployee(emp)}
-                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
-                          title="実際の決定通知書や明細に合わせて1円単位で調整できます"
-                        >
-                          <Sliders className="w-3 h-3" />
-                          <span>1円微調整</span>
-                        </button>
-                        <span className="text-rose-600 font-mono font-bold">
-                          -¥{result.totalDeductions.toLocaleString()}
-                        </span>
-                      </div>
+                      <span>本人控除（天引き預り金）の内訳</span>
+                      <span className="text-rose-600 font-mono font-bold">
+                        -¥{result.totalDeductions.toLocaleString()}
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-gray-600 pt-0.5">
-                      <div className="flex justify-between items-center">
-                        <span className="flex items-center gap-1">
-                          <span>健保・厚年本人:</span>
-                          {(emp.customOverrides?.healthInsurance !== undefined || emp.customOverrides?.welfarePension !== undefined || emp.customOverrides?.careInsurance !== undefined) && (
-                            <span className="text-[9px] text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">手動</span>
-                          )}
-                        </span>
+                      <div className="flex justify-between">
+                        <span>健保・厚年本人:</span>
                         <span className="font-mono">¥{result.socialInsuranceTotal.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="flex items-center gap-1">
-                          <span>雇用保険本人:</span>
-                          {emp.customOverrides?.employmentInsurance !== undefined && (
-                            <span className="text-[9px] text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">手動</span>
-                          )}
-                        </span>
+                      <div className="flex justify-between">
+                        <span>雇用保険本人:</span>
                         <span className="font-mono">¥{result.employmentInsurance.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="flex items-center gap-1">
-                          <span>源泉所得税:</span>
-                          {emp.customOverrides?.incomeTax !== undefined && (
-                            <span className="text-[9px] text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">手動</span>
-                          )}
-                        </span>
+                      <div className="flex justify-between">
+                        <span>源泉所得税:</span>
                         <span className="font-mono">¥{result.incomeTax.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between">
                         <span>住民税:</span>
                         <span className="font-mono">¥{result.residentTax.toLocaleString()}</span>
                       </div>
@@ -1426,14 +1323,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                       {r.employee.hasEmploymentInsurance ? 'ON' : 'OFF'}
                     </span>
                   </td>
-                  <td className="p-3 text-right font-mono text-rose-600">
-                    <div className="flex items-center justify-end gap-1">
-                      {((r.employee.customOverrides && Object.keys(r.employee.customOverrides).length > 0) || (r.employee.standardMonthlyRemuneration && r.employee.standardMonthlyRemuneration > 0)) && (
-                        <span className="text-[9px] font-bold px-1 py-0.2 bg-amber-100 text-amber-800 rounded">手動</span>
-                      )}
-                      <span>¥{r.totalDeductions.toLocaleString()}</span>
-                    </div>
-                  </td>
+                  <td className="p-3 text-right font-mono text-rose-600">¥{r.totalDeductions.toLocaleString()}</td>
                   <td className="p-3 text-right font-mono font-black text-emerald-700 bg-emerald-50/60">
                     ¥{r.netSalary.toLocaleString()}
                   </td>
@@ -1447,17 +1337,9 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                     <div className="flex items-center justify-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setOverrideModalEmployee(r.employee)}
-                        title="控除額・標準報酬を1円単位で微調整"
-                        className="p-1 text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
-                      >
-                        <Sliders className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handleDuplicateEmployee(r.employee)}
                         title="このメンバーを複製"
-                        className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                        className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
@@ -1465,7 +1347,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                         type="button"
                         onClick={() => handleDeleteEmployee(r.employee.id)}
                         title="このメンバーを削除"
-                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1481,7 +1363,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       {/* Settings Modal */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-indigo-600" />
@@ -1490,7 +1372,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                className="text-gray-400 hover:text-gray-600"
               >
                 ✕
               </button>
@@ -1516,40 +1398,6 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                 </div>
               </div>
 
-              {/* 都道府県選択（協会けんぽ健康保険料率） */}
-              <div className="border-t pt-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-gray-700 block">協会けんぽ（事業所所在地・都道府県）</span>
-                  <span className="text-[10px] text-gray-500">※選択すると健康保険料率が自動更新</span>
-                </div>
-                <select
-                  value={salarySettings.prefecture || '福岡県'}
-                  onChange={(e) => {
-                    const pref = e.target.value;
-                    const prefData = PREFECTURE_HEALTH_RATES[pref];
-                    if (prefData) {
-                      onSaveSalarySettings({
-                        ...salarySettings,
-                        prefecture: pref,
-                        healthInsuranceRate: prefData.rate
-                      });
-                    } else {
-                      onSaveSalarySettings({
-                        ...salarySettings,
-                        prefecture: pref
-                      });
-                    }
-                  }}
-                  className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 font-bold bg-white text-gray-800 cursor-pointer"
-                >
-                  {Object.entries(PREFECTURE_HEALTH_RATES).map(([pref, info]) => (
-                    <option key={pref} value={pref}>
-                      {info.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="border-t pt-3 space-y-2">
                 <span className="font-bold text-gray-700 block">保険料率（労使折半分）</span>
                 
@@ -1558,12 +1406,12 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                     <span className="text-gray-500 block">健康保険 (本人折半):</span>
                     <input
                       type="number"
-                      step="0.0001"
+                      step="0.001"
                       value={salarySettings.healthInsuranceRate}
                       onChange={(e) => onSaveSalarySettings({ ...salarySettings, healthInsuranceRate: Number(e.target.value) })}
-                      className="w-full border rounded px-2 py-1 font-mono font-bold"
+                      className="w-full border rounded px-2 py-1 font-mono"
                     />
-                    <span className="text-[10px] text-gray-400">福岡: 0.05135 / 東京: 0.0499</span>
+                    <span className="text-[10px] text-gray-400">標準: 0.050 (5.0%)</span>
                   </div>
 
                   <div>
@@ -1573,7 +1421,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                       step="0.001"
                       value={salarySettings.pensionRate}
                       onChange={(e) => onSaveSalarySettings({ ...salarySettings, pensionRate: Number(e.target.value) })}
-                      className="w-full border rounded px-2 py-1 font-mono font-bold"
+                      className="w-full border rounded px-2 py-1 font-mono"
                     />
                     <span className="text-[10px] text-gray-400">標準: 0.0915 (9.15%)</span>
                   </div>
@@ -1585,7 +1433,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                       step="0.001"
                       value={salarySettings.empInsuranceEmployeeRate}
                       onChange={(e) => onSaveSalarySettings({ ...salarySettings, empInsuranceEmployeeRate: Number(e.target.value) })}
-                      className="w-full border rounded px-2 py-1 font-mono font-bold"
+                      className="w-full border rounded px-2 py-1 font-mono"
                     />
                     <span className="text-[10px] text-gray-400">標準: 0.006 (0.6%)</span>
                   </div>
@@ -1597,24 +1445,11 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                       step="0.001"
                       value={salarySettings.empInsuranceCompanyRate}
                       onChange={(e) => onSaveSalarySettings({ ...salarySettings, empInsuranceCompanyRate: Number(e.target.value) })}
-                      className="w-full border rounded px-2 py-1 font-mono font-bold"
+                      className="w-full border rounded px-2 py-1 font-mono"
                     />
                     <span className="text-[10px] text-gray-400">標準: 0.0095 (0.95%)</span>
                   </div>
                 </div>
-              </div>
-
-              {/* 差額と計算の仕組みについての解説 */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1.5">
-                <span className="font-bold text-slate-800 flex items-center gap-1">
-                  <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                  実際の給与明細との微妙な差額について
-                </span>
-                <p>・<strong>健康保険料率</strong>: 協会けんぽの支部（都道府県）により料率が異なります（上記で選択可能）。</p>
-                <p>・<strong>標準報酬月額</strong>: 4〜6月の支給実績に基づいて9月に改定されるため、月々の総支給額と等級がずれる場合があります。</p>
-                <p>・<strong>端数処理</strong>: 50銭以下の端数処理ルールにより、1円前後の差が生じることがあります。</p>
-                <p>・<strong>扶養親族</strong>: 所得税額のみを軽減します（社会保険・雇用保険は扶養に関係なく一律です）。</p>
-                <p className="text-indigo-600 font-semibold pt-0.5">💡 各メンバーカードの「1円微調整」から通知書通りの金額へ直接入力して完全一致させられます。</p>
               </div>
             </div>
 
@@ -1622,7 +1457,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700"
               >
                 設定を閉じる
               </button>
@@ -1630,314 +1465,6 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* 控除額・標準報酬月額の1円単位微調整モーダル */}
-      {overrideModalEmployee && (() => {
-        const currentEmp = employees.find(e => e.id === overrideModalEmployee.id) || overrideModalEmployee;
-        const baseEmpWithoutOverrides: SalaryEmployee = {
-          ...currentEmp,
-          standardMonthlyRemuneration: undefined,
-          customOverrides: undefined,
-        };
-        const standardCalc = calculateEmployeeSalary(baseEmpWithoutOverrides, salarySettings);
-        const actualCalc = calculateEmployeeSalary(currentEmp, salarySettings);
-        const hasAnyOverride = Boolean(
-          (currentEmp.standardMonthlyRemuneration && currentEmp.standardMonthlyRemuneration > 0) ||
-          (currentEmp.customOverrides && Object.keys(currentEmp.customOverrides).length > 0)
-        );
-
-        return (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 border border-slate-200 max-h-[92vh] overflow-y-auto">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2.5 bg-indigo-100 text-indigo-800 rounded-xl">
-                    <Sliders className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                      <span>{currentEmp.name} の控除・標準報酬の1円微調整</span>
-                      {hasAnyOverride && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md">
-                          手動確定額 反映中
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      総支給額: ¥{(actualCalc.grossSalary).toLocaleString()}（基本給 ¥{(currentEmp.baseSalary || 0).toLocaleString()} + 手当 ¥{actualCalc.totalAllowances.toLocaleString()}）
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOverrideModalEmployee(null)}
-                  className="text-slate-400 hover:text-slate-600 p-1.5 cursor-pointer rounded-lg hover:bg-slate-100"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Educational info callout */}
-              <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-3 text-xs space-y-1.5 text-blue-900">
-                <div className="font-bold flex items-center gap-1.5">
-                  <Info className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>給与明細や決定通知書と1円単位で完全一致させる手動上書き</span>
-                </div>
-                <p className="text-[11px] text-blue-800 leading-relaxed">
-                  社保の「標準報酬月額（定時決定）」や、各自治体の住民税通知書、源泉徴収税額表の端数処理による数円のズレがある場合、ここで実際の通知額を直接入力できます。
-                  各項目の数値を消去（空欄）にすると、自動計算式に戻ります。
-                </p>
-              </div>
-
-              {/* Form Grid */}
-              <div className="space-y-4 text-xs">
-                {/* 1. 標準報酬月額 */}
-                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-slate-800 block text-xs">標準報酬月額（等級額）</span>
-                      <span className="text-[11px] text-slate-500">
-                        自動算定目安: ¥{getStandardMonthlyRemuneration(actualCalc.grossSalary).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">¥</span>
-                      <input
-                        type="number"
-                        placeholder={`目安: ${getStandardMonthlyRemuneration(actualCalc.grossSalary)}`}
-                        value={currentEmp.standardMonthlyRemuneration ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? undefined : Number(e.target.value);
-                          handleUpdateStandardRemuneration(currentEmp.id, v);
-                        }}
-                        className="w-32 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-mono font-bold text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-500">
-                    ※毎年4〜6月の算定基礎届で決定された標準報酬月額を入力すると、健保・厚年の基礎額に反映されます。
-                  </p>
-                </div>
-
-                {/* 2. 各控除項目の手動上書き */}
-                <div className="space-y-2.5">
-                  <span className="font-bold text-slate-700 block">各控除（預り金）の直接入力:</span>
-                  
-                  {/* 健康保険 */}
-                  <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <div>
-                      <span className="font-bold text-slate-800">健康保険料（本人分）</span>
-                      <span className="text-[11px] text-slate-500 ml-2">
-                        自動計算: ¥{standardCalc.healthInsurance.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">¥</span>
-                      <input
-                        type="number"
-                        placeholder={`自動: ${standardCalc.healthInsurance}`}
-                        value={currentEmp.customOverrides?.healthInsurance ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? undefined : Number(e.target.value);
-                          handleUpdateCustomOverride(currentEmp.id, 'healthInsurance', v);
-                        }}
-                        className="w-28 bg-white border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                      />
-                      {currentEmp.customOverrides?.healthInsurance !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCustomOverride(currentEmp.id, 'healthInsurance', undefined)}
-                          title="自動計算に戻す"
-                          className="text-[10px] text-rose-500 hover:text-rose-700 px-1 font-bold cursor-pointer"
-                        >
-                          リセット
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 介護保険 (40歳以上等の場合) */}
-                  {currentEmp.hasCareInsurance && (
-                    <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                      <div>
-                        <span className="font-bold text-slate-800">介護保険料（本人分）</span>
-                        <span className="text-[11px] text-slate-500 ml-2">
-                          自動計算: ¥{standardCalc.careInsurance.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-400">¥</span>
-                        <input
-                          type="number"
-                          placeholder={`自動: ${standardCalc.careInsurance}`}
-                          value={currentEmp.customOverrides?.careInsurance ?? ''}
-                          onChange={(e) => {
-                            const v = e.target.value === '' ? undefined : Number(e.target.value);
-                            handleUpdateCustomOverride(currentEmp.id, 'careInsurance', v);
-                          }}
-                          className="w-28 bg-white border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                        />
-                        {currentEmp.customOverrides?.careInsurance !== undefined && (
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateCustomOverride(currentEmp.id, 'careInsurance', undefined)}
-                            title="自動計算に戻す"
-                            className="text-[10px] text-rose-500 hover:text-rose-700 px-1 font-bold cursor-pointer"
-                          >
-                            リセット
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 厚生年金 */}
-                  <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <div>
-                      <span className="font-bold text-slate-800">厚生年金保険料（本人分）</span>
-                      <span className="text-[11px] text-slate-500 ml-2">
-                        自動計算: ¥{standardCalc.welfarePension.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">¥</span>
-                      <input
-                        type="number"
-                        placeholder={`自動: ${standardCalc.welfarePension}`}
-                        value={currentEmp.customOverrides?.welfarePension ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? undefined : Number(e.target.value);
-                          handleUpdateCustomOverride(currentEmp.id, 'welfarePension', v);
-                        }}
-                        className="w-28 bg-white border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                      />
-                      {currentEmp.customOverrides?.welfarePension !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCustomOverride(currentEmp.id, 'welfarePension', undefined)}
-                          title="自動計算に戻す"
-                          className="text-[10px] text-rose-500 hover:text-rose-700 px-1 font-bold cursor-pointer"
-                        >
-                          リセット
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 雇用保険 */}
-                  <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <div>
-                      <span className="font-bold text-slate-800">雇用保険料（本人分）</span>
-                      <span className="text-[11px] text-slate-500 ml-2">
-                        自動計算: ¥{standardCalc.employmentInsurance.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">¥</span>
-                      <input
-                        type="number"
-                        placeholder={`自動: ${standardCalc.employmentInsurance}`}
-                        value={currentEmp.customOverrides?.employmentInsurance ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? undefined : Number(e.target.value);
-                          handleUpdateCustomOverride(currentEmp.id, 'employmentInsurance', v);
-                        }}
-                        className="w-28 bg-white border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                      />
-                      {currentEmp.customOverrides?.employmentInsurance !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCustomOverride(currentEmp.id, 'employmentInsurance', undefined)}
-                          title="自動計算に戻す"
-                          className="text-[10px] text-rose-500 hover:text-rose-700 px-1 font-bold cursor-pointer"
-                        >
-                          リセット
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 源泉所得税 */}
-                  <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-800">源泉所得税</span>
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium">
-                          扶養親族 {currentEmp.dependentsCount || 0}名適用
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-500">
-                        自動計算（月額表・甲欄）: ¥{standardCalc.incomeTax.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400">¥</span>
-                      <input
-                        type="number"
-                        placeholder={`自動: ${standardCalc.incomeTax}`}
-                        value={currentEmp.customOverrides?.incomeTax ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value === '' ? undefined : Number(e.target.value);
-                          handleUpdateCustomOverride(currentEmp.id, 'incomeTax', v);
-                        }}
-                        className="w-28 bg-white border border-slate-300 rounded-lg px-2 py-1 font-mono font-bold text-right text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                      />
-                      {currentEmp.customOverrides?.incomeTax !== undefined && (
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCustomOverride(currentEmp.id, 'incomeTax', undefined)}
-                          title="自動計算に戻す"
-                          className="text-[10px] text-rose-500 hover:text-rose-700 px-1 font-bold cursor-pointer"
-                        >
-                          リセット
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Calculation summary preview inside modal */}
-                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
-                  <div>
-                    <span className="text-[11px] text-emerald-800 block">反映後の差引手取額（振込金額）</span>
-                    <span className="text-base font-black text-emerald-900 font-mono">
-                      ¥{actualCalc.netSalary.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="text-right text-[11px] text-slate-600">
-                    <span>控除合計: </span>
-                    <span className="font-mono font-bold text-rose-600">
-                      -¥{actualCalc.totalDeductions.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                {hasAnyOverride ? (
-                  <button
-                    type="button"
-                    onClick={() => handleClearAllOverrides(currentEmp.id)}
-                    className="text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-xl transition-colors cursor-pointer"
-                  >
-                    すべて自動計算に戻す
-                  </button>
-                ) : (
-                  <div />
-                )}
-                <button
-                  type="button"
-                  onClick={() => setOverrideModalEmployee(null)}
-                  className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 cursor-pointer shadow-xs"
-                >
-                  完了して閉じる
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Copy Salary From Other Month Modal */}
       {isCopyModalOpen && (
