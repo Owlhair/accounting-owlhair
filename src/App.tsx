@@ -53,7 +53,6 @@ import { SettingsModal } from './components/SettingsModal';
 import { TeamChatDrawer } from './components/TeamChatDrawer';
 import { PwaInstallPromptModal } from './components/PwaInstallPromptModal';
 import { LoginScreen, loadAuthState, clearAuthSession } from './components/LoginScreen';
-import { HealingLounge } from './components/HealingLounge';
 import { MessageSquareText } from 'lucide-react';
 
 export default function App() {
@@ -170,7 +169,6 @@ export default function App() {
   const [isFiscalSettingsOpen, setIsFiscalSettingsOpen] = useState(false);
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [isHealingLoungeOpen, setIsHealingLoungeOpen] = useState(false);
 
   // Sync transactions with localStorage
   useEffect(() => {
@@ -1108,7 +1106,6 @@ export default function App() {
         isCloudConnected={isCloudConnected}
         isCloudSyncing={isCloudSyncing}
         onManualCloudSync={handleForcePullFromCloud}
-        onOpenHealingLounge={() => setIsHealingLoungeOpen(true)}
       />
 
       {/* Main Container */}
@@ -1200,7 +1197,6 @@ export default function App() {
             onSaveSalarySettings={handleSaveSalarySettings}
             onRegisterSalaryToTransactions={handleRegisterSalaryToTransactions}
             onSyncToMonthEndExpenseCard={handleSyncSalaryToExpenseCards}
-            onOpenHealingLounge={() => setIsHealingLoungeOpen(true)}
           />
         )}
 
@@ -1364,33 +1360,6 @@ export default function App() {
         quotedTransaction={quotedTransaction}
         onClearQuote={() => setQuotedTransaction(null)}
       />
-
-      {/* Cozy Healing Lounge Modal */}
-      <HealingLounge
-        isOpen={isHealingLoungeOpen}
-        onClose={() => setIsHealingLoungeOpen(false)}
-      />
-
-      {/* Floating Cozy Companion Badge (Healing Lounge) */}
-      <aside 
-        aria-label="ほっこり休憩"
-        className="fixed bottom-4 right-4 z-30 flex items-center gap-1.5"
-      >
-        <button
-          type="button"
-          onClick={() => setIsHealingLoungeOpen(true)}
-          className="group flex items-center gap-2 px-3 py-2 bg-white/95 hover:bg-amber-50 text-slate-700 hover:text-amber-950 border border-amber-200/90 rounded-2xl shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-95"
-          title="ほっこり休憩室：社長、お疲れ様です！お茶を飲んで一息つきませんか？"
-        >
-          <span className="text-xl group-hover:scale-125 transition-transform duration-300">
-            🍵
-          </span>
-          <span className="text-xs font-bold text-slate-700 group-hover:text-amber-900 hidden sm:inline">
-            ほっこり休憩
-          </span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        </button>
-      </aside>
     </div>
   );
 }
