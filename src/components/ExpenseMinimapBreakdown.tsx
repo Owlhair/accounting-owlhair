@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Receipt, 
   Tag, 
@@ -10,7 +10,12 @@ import {
   ChevronDown, 
   ChevronUp, 
   Layers, 
-  AlertCircle 
+  AlertCircle,
+  Edit3,
+  Trash2,
+  AlertTriangle,
+  Check,
+  X
 } from 'lucide-react';
 import { Transaction, ExpenseCard } from '../types';
 
@@ -22,6 +27,8 @@ interface ExpenseMinimapBreakdownProps {
   totalAllCardsAmount: number;
   isOpen: boolean;
   onToggle: () => void;
+  onEditTransaction?: (tx: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
 }
 
 export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = ({
@@ -32,9 +39,15 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
   totalAllCardsAmount,
   isOpen,
   onToggle,
+  onEditTransaction,
+  onDeleteTransaction,
 }) => {
   const [year, monthNum] = activeMonth.split('-');
   const monthInt = parseInt(monthNum, 10);
+
+  // Local state for inline delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isConfirmingBulkClean, setIsConfirmingBulkClean] = useState<boolean>(false);
 
   // 1. Registered expense transactions for this activeMonth
   const activeMonthTxs = React.useMemo(() => {
@@ -56,6 +69,39 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
 
   const registeredTotal = activeMonthTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
   const isRegistered = activeMonthTxs.length > 0;
+
+  // Duplicate detection for this active month
+  const duplicateInfo = React.useMemo(() => {
+    const dups = new Set<string>();
+    const duplicateGroups: Record<string, Transaction[]> = {};
+
+    activeMonthTxs.forEach((tx) => {
+      // Group key: for salary categories, group by category; for other expenses, group by category + amount or description
+      const isSalaryCat = tx.category === '役員報酬' || tx.category === '給料手当' || tx.category === '法定福利費';
+      const key = isSalaryCat ? `salary_${tx.category}` : `exact_${tx.category}_${tx.amount}_${tx.store || ''}`;
+      if (!duplicateGroups[key]) {
+        duplicateGroups[key] = [];
+      }
+      duplicateGroups[key].push(tx);
+    });
+
+    const redundantTxIds: string[] = [];
+
+    Object.values(duplicateGroups).forEach((group) => {
+      if (group.length > 1) {
+        group.forEach((t) => dups.add(t.id));
+        // Sort by created_at desc if present, keep the earliest or latest, mark others redundant
+        const [keep, ...redundant] = group;
+        redundant.forEach((r) => redundantTxIds.push(r.id));
+      }
+    });
+
+    return {
+      duplicateIds: dups,
+      redundantTxIds,
+      count: redundantTxIds.length,
+    };
+  }, [activeMonthTxs]);
 
   // 2. Planned cards list for this month (when reviewing or if un-registered)
   const plannedCardsData = React.useMemo(() => {
@@ -183,60 +229,193 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
           </p>
 
           {isRegistered ? (
-            /* Registered Transactions Cards Grid */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {activeMonthTxs.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-2xs hover:border-rose-300 hover:shadow-xs transition-all flex flex-col justify-between"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <span
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(
-                          tx.category
-                        )}`}
-                      >
-                        {tx.category}
+            <div className="space-y-3">
+              {/* Duplicate Detection Warning Banner & 1-Click Clean */}
+              {duplicateInfo.count > 0 && (
+                <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
+                  <div className="flex items-start sm:items-center gap-2">
+                    <div className="p-1.5 bg-amber-100 rounded-lg text-amber-700 shrink-0 mt-0.5 sm:mt-0">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-amber-950 block">
+                        給与・経費の重複計上（{duplicateInfo.count}件）が検出されました
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {tx.date_from || tx.date_to || '-'}
+                      <span className="text-[11px] text-amber-800 block">
+                        同じ科目や金額が複数回登録されています。各カードの「削除」ボタン、または右の一括ボタンで重複分を整理できます。
                       </span>
                     </div>
+                  </div>
 
-                    <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
-                      {tx.description || tx.category}
-                    </h4>
-
-                    {tx.memo && (
-                      <p className="text-[10px] text-slate-500 line-clamp-2 bg-slate-50 p-1 rounded border border-slate-100">
-                        {tx.memo}
-                      </p>
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    {isConfirmingBulkClean ? (
+                      <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-amber-300 shadow-xs">
+                        <span className="text-[11px] font-bold text-rose-800">
+                          重複 {duplicateInfo.count}件を削除？
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onDeleteTransaction) {
+                              duplicateInfo.redundantTxIds.forEach((id) => onDeleteTransaction(id));
+                            }
+                            setIsConfirmingBulkClean(false);
+                          }}
+                          className="px-2 py-0.5 text-[10px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded transition-colors cursor-pointer"
+                        >
+                          一括削除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmingBulkClean(false)}
+                          className="px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingBulkClean(true)}
+                        className="px-2.5 py-1 text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 rounded-lg border border-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-amber-800" />
+                        <span>重複分（{duplicateInfo.count}件）を一括整理</span>
+                      </button>
                     )}
                   </div>
-
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                      {tx.store && (
-                        <span className="flex items-center gap-0.5">
-                          <Store className="w-3 h-3 text-slate-400" />
-                          {tx.store}
-                        </span>
-                      )}
-                      {tx.payment_method && (
-                        <span className="flex items-center gap-0.5">
-                          <CreditCard className="w-3 h-3 text-slate-400" />
-                          {tx.payment_method}
-                        </span>
-                      )}
-                    </div>
-
-                    <span className="font-mono font-black text-rose-900 text-sm">
-                      ¥{(tx.amount || 0).toLocaleString()}
-                    </span>
-                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* Registered Transactions Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {activeMonthTxs.map((tx) => {
+                  const isDuplicate = duplicateInfo.duplicateIds.has(tx.id);
+                  const isConfirming = confirmDeleteId === tx.id;
+
+                  return (
+                    <div
+                      key={tx.id}
+                      className={`bg-white p-3 rounded-xl border transition-all flex flex-col justify-between ${
+                        isDuplicate 
+                          ? 'border-amber-300 bg-amber-50/20 shadow-xs' 
+                          : 'border-slate-200/90 shadow-2xs hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(
+                                tx.category
+                              )}`}
+                            >
+                              {tx.category}
+                            </span>
+                            {isDuplicate && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 rounded border border-amber-300">
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                重複の疑い
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            {tx.date_from || tx.date_to || '-'}
+                          </span>
+                        </div>
+
+                        <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-2">
+                          {tx.description || tx.category}
+                        </h4>
+
+                        {tx.memo && (
+                          <p className="text-[10px] text-slate-500 line-clamp-2 bg-slate-50 p-1 rounded border border-slate-100">
+                            {tx.memo}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Card Bottom: Metadata, Amount, and Edit/Delete Actions */}
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                            {tx.store && (
+                              <span className="flex items-center gap-0.5">
+                                <Store className="w-3 h-3 text-slate-400" />
+                                {tx.store}
+                              </span>
+                            )}
+                            {tx.payment_method && (
+                              <span className="flex items-center gap-0.5">
+                                <CreditCard className="w-3 h-3 text-slate-400" />
+                                {tx.payment_method}
+                              </span>
+                            )}
+                          </div>
+
+                          <span className="font-mono font-black text-rose-900 text-sm">
+                            ¥{(tx.amount || 0).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {/* Direct Edit / Delete Action Buttons */}
+                        {isConfirming ? (
+                          <div className="p-1.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center justify-between gap-1 animate-in fade-in duration-150">
+                            <span className="text-[11px] font-bold text-rose-900 truncate">
+                              この仕訳を削除しますか？
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onDeleteTransaction?.(tx.id);
+                                  setConfirmDeleteId(null);
+                                }}
+                                className="px-2 py-0.5 text-[10px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded transition-colors cursor-pointer"
+                              >
+                                削除実行
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-200 rounded transition-colors cursor-pointer"
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                            {onEditTransaction && (
+                              <button
+                                type="button"
+                                onClick={() => onEditTransaction(tx)}
+                                className="px-2 py-1 text-[11px] font-medium text-slate-700 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50/80 rounded-md border border-slate-200 hover:border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                title="仕訳を編集・修正"
+                              >
+                                <Edit3 className="w-3 h-3 text-indigo-600" />
+                                <span>修正</span>
+                              </button>
+                            )}
+
+                            {onDeleteTransaction && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(tx.id)}
+                                className="px-2 py-1 text-[11px] font-medium text-rose-700 hover:text-rose-900 bg-rose-50/60 hover:bg-rose-100/80 rounded-md border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+                                title="仕訳を出納帳から削除"
+                              >
+                                <Trash2 className="w-3 h-3 text-rose-600" />
+                                <span>削除</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             /* Unregistered Planned Cards Grid */

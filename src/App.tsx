@@ -484,7 +484,29 @@ export default function App() {
     });
 
     setTransactions((prev) => {
-      const updated = [...newItems, ...prev];
+      const monthStr = items[0]?.date.substring(0, 7);
+      const toRemoveIds: string[] = [];
+      const itemTitles = new Set(items.map((i) => i.title));
+      const itemCategories = new Set(items.map((i) => i.category));
+
+      const filtered = prev.filter((t) => {
+        if (!monthStr) return true;
+        const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
+        if (txMonth !== monthStr) return true;
+
+        // If it's a previously registered expense card item for this month, replace it
+        if (t.id.startsWith('tx-expcard-')) {
+          const rawTitle = t.description.replace(/ \([^)]*\)$/, '');
+          if (itemTitles.has(rawTitle) || itemCategories.has(t.category)) {
+            toRemoveIds.push(t.id);
+            return false;
+          }
+        }
+        return true;
+      });
+
+      toRemoveIds.forEach((id) => syncDeleteTransactionFromFirestore(id));
+      const updated = [...newItems, ...filtered];
       saveTransactions(updated);
       return updated;
     });
@@ -719,21 +741,35 @@ export default function App() {
 
     setTransactions((prev) => {
       // Clean up previous salary transactions for the same targetMonth if any so re-registering cleanly replaces
-      const filtered = prev.filter(t => !(
-        t.type === 'expense' &&
-        (
-          t.id.startsWith(`tx-sal-`) ||
-          t.description.includes(`${targetMonth}分 役員報酬`) ||
-          t.description.includes(`${targetMonth}分 給料手当`) ||
-          t.description.includes(`${targetMonth}分 社会保険料`) ||
-          t.description.includes(`${targetMonth}分 雇用保険`) ||
-          t.description.includes(`${targetMonth}分 源泉所得税`)
-        ) &&
-        (
-          (t.date_from && t.date_from.startsWith(targetMonth)) ||
-          t.description.includes(`${targetMonth}分`)
-        )
-      ));
+      const toRemoveIds: string[] = [];
+      const filtered = prev.filter((t) => {
+        const isMatch = (
+          (t.type === 'expense' || t.type === 'transfer') &&
+          (
+            t.id.startsWith(`tx-sal-`) ||
+            t.category === '役員報酬' ||
+            t.category === '給料手当' ||
+            t.category === '法定福利費' ||
+            t.description.includes(`${targetMonth}分 役員報酬`) ||
+            t.description.includes(`${targetMonth}分 給料手当`) ||
+            t.description.includes(`${targetMonth}分 社会保険料`) ||
+            t.description.includes(`${targetMonth}分 雇用保険`) ||
+            t.description.includes(`${targetMonth}分 源泉所得税`)
+          ) &&
+          (
+            (t.date_from && t.date_from.startsWith(targetMonth)) ||
+            (t.date_to && t.date_to.startsWith(targetMonth)) ||
+            t.description.includes(`${targetMonth}分`)
+          )
+        );
+        if (isMatch) {
+          toRemoveIds.push(t.id);
+          return false;
+        }
+        return true;
+      });
+
+      toRemoveIds.forEach((id) => syncDeleteTransactionFromFirestore(id));
       const updated = [...newTxList, ...filtered];
       saveTransactions(updated);
       return updated;
@@ -1151,6 +1187,8 @@ export default function App() {
             onRegisterExpenseBatch={handleRegisterExpenseBatch}
             onSaveExpenseCards={handleSaveExpenseCards}
             onNavigateToSalary={() => setCurrentTab('salary')}
+            onEditTransaction={setEditingTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
             onSyncSalaryToExpenseCards={(targetMonth) => {
               const emps = (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth]) || settings.salaryEmployees || [];
               const salarySettings = settings.salarySettings || {
@@ -1197,6 +1235,8 @@ export default function App() {
             onSaveSalarySettings={handleSaveSalarySettings}
             onRegisterSalaryToTransactions={handleRegisterSalaryToTransactions}
             onSyncToMonthEndExpenseCard={handleSyncSalaryToExpenseCards}
+            onEditTransaction={setEditingTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
           />
         )}
 

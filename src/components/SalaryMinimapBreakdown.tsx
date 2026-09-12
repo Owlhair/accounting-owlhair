@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   Store, 
@@ -11,7 +11,10 @@ import {
   UserCheck, 
   Receipt, 
   CreditCard,
-  Building2
+  Building2,
+  Edit3,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { SalaryEmployee, Transaction, SalaryCalculationResult } from '../types';
 import { calculateTotalSalarySummary } from '../utils/salaryCalculator';
@@ -28,6 +31,8 @@ interface SalaryMinimapBreakdownProps {
   isOpen: boolean;
   onToggle: () => void;
   onEditEmployee?: (emp: SalaryEmployee) => void;
+  onEditTransaction?: (tx: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
 }
 
 export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
@@ -40,9 +45,15 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
   isOpen,
   onToggle,
   onEditEmployee,
+  onEditTransaction,
+  onDeleteTransaction,
 }) => {
   const [year, monthNum] = activeMonth.split('-');
   const monthInt = parseInt(monthNum, 10);
+
+  // Local state for inline delete confirmation & bulk cleanup
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isConfirmingBulkClean, setIsConfirmingBulkClean] = useState<boolean>(false);
 
   // Find registered salary transactions for this activeMonth
   const salaryTxs = React.useMemo(() => {
@@ -59,6 +70,36 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
           (t.date_to && t.date_to.startsWith(activeMonth)))
     );
   }, [transactions, activeMonth]);
+
+  // Duplicate detection among registered salary transactions
+  const duplicateInfo = React.useMemo(() => {
+    const dups = new Set<string>();
+    const groups: Record<string, Transaction[]> = {};
+
+    salaryTxs.forEach((t) => {
+      // Group by category (e.g. multiple 役員報酬 or multiple 給料手当 or multiple 法定福利費)
+      const key = t.category || 'その他';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    });
+
+    const redundantTxIds: string[] = [];
+
+    Object.values(groups).forEach((group) => {
+      if (group.length > 1) {
+        group.forEach((t) => dups.add(t.id));
+        // Keep the first, mark remainder as redundant
+        const [keep, ...redundant] = group;
+        redundant.forEach((r) => redundantTxIds.push(r.id));
+      }
+    });
+
+    return {
+      duplicateIds: dups,
+      redundantTxIds,
+      count: redundantTxIds.length,
+    };
+  }, [salaryTxs]);
 
   const registeredSalaryTotal = salaryTxs
     .filter((t) => t.category === '役員報酬' || t.category === '給料手当')
@@ -231,27 +272,150 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
 
           {/* Registered transactions reference (if any) */}
           {salaryTxs.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-slate-200/80">
-              <span className="text-[11px] font-bold text-slate-700 block mb-1.5">
-                出納帳に計上されている給与・社保の取引レコード ({salaryTxs.length}件):
-              </span>
-              <div className="space-y-1">
-                {salaryTxs.map((t) => (
-                  <div
-                    key={t.id}
-                    className="text-[11px] bg-white px-2.5 py-1.5 rounded-lg border border-slate-200/80 flex items-center justify-between gap-2"
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-                        {t.category}
-                      </span>
-                      <span className="truncate text-slate-700">{t.description}</span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-900 shrink-0">
-                      ¥{(t.amount || 0).toLocaleString()}
-                    </span>
+            <div className="mt-2.5 pt-2.5 border-t border-slate-200/80 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <span className="text-[11px] font-bold text-slate-700 block">
+                  出納帳に計上されている給与・社保の取引レコード ({salaryTxs.length}件):
+                </span>
+
+                {/* Bulk clean duplicates button if found */}
+                {duplicateInfo.count > 0 && (
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                    {isConfirmingBulkClean ? (
+                      <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-amber-300">
+                        <span className="text-[10px] font-bold text-rose-800">
+                          重複 {duplicateInfo.count}件を削除？
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onDeleteTransaction) {
+                              duplicateInfo.redundantTxIds.forEach((id) => onDeleteTransaction(id));
+                            }
+                            setIsConfirmingBulkClean(false);
+                          }}
+                          className="px-1.5 py-0.5 text-[9px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer"
+                        >
+                          一括削除
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmingBulkClean(false)}
+                          className="px-1 py-0.5 text-[9px] text-slate-600 hover:bg-slate-100 rounded cursor-pointer"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingBulkClean(true)}
+                        className="px-2 py-0.5 text-[10px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded border border-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3 text-amber-700" />
+                        <span>給与の重複（{duplicateInfo.count}件）を一括削除</span>
+                      </button>
+                    )}
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Duplicate alert note if any */}
+              {duplicateInfo.count > 0 && (
+                <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>
+                    同じ科目の給与仕訳が重複して計上されています。不要な行の「削除」ボタン、または右上の「一括削除」で整理してください。
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                {salaryTxs.map((t) => {
+                  const isDuplicate = duplicateInfo.duplicateIds.has(t.id);
+                  const isConfirming = confirmDeleteId === t.id;
+
+                  return (
+                    <div
+                      key={t.id}
+                      className={`text-[11px] bg-white px-2.5 py-2 rounded-lg border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                        isDuplicate
+                          ? 'border-amber-300 bg-amber-50/20'
+                          : 'border-slate-200/80 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+                          {t.category}
+                        </span>
+                        {isDuplicate && (
+                          <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 rounded border border-amber-300 shrink-0">
+                            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                            重複
+                          </span>
+                        )}
+                        <span className="truncate text-slate-700 font-medium">
+                          {t.description}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono shrink-0 hidden md:inline">
+                          {t.date_from || t.date_to}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                        <span className="font-mono font-bold text-slate-900 text-xs">
+                          ¥{(t.amount || 0).toLocaleString()}
+                        </span>
+
+                        {isConfirming ? (
+                          <div className="flex items-center gap-1 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                            <span className="text-[10px] font-bold text-rose-900">削除？</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteTransaction?.(t.id);
+                                setConfirmDeleteId(null);
+                              }}
+                              className="px-1.5 py-0.5 text-[9px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded cursor-pointer"
+                            >
+                              実行
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="px-1 py-0.5 text-[9px] text-slate-600 hover:bg-slate-200 rounded cursor-pointer"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            {onEditTransaction && (
+                              <button
+                                type="button"
+                                onClick={() => onEditTransaction(t)}
+                                className="p-1 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                                title="修正・編集"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {onDeleteTransaction && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(t.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                title="削除"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

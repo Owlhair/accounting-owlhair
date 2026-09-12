@@ -96,6 +96,8 @@ interface SalaryViewProps {
     results: SalaryCalculationResult[];
   }) => void;
   onSyncToMonthEndExpenseCard?: (summary: SalaryTotalSummary, targetMonth: string) => void;
+  onEditTransaction?: (tx: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
 }
 
 export const SalaryView: React.FC<SalaryViewProps> = ({
@@ -108,6 +110,8 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   onSaveSalarySettings,
   onRegisterSalaryToTransactions,
   onSyncToMonthEndExpenseCard,
+  onEditTransaction,
+  onDeleteTransaction,
 }) => {
   // Current active fiscal period (matches StoreSalesCardBoard & ExpenseCardsView)
   const currentPeriod = useMemo(() => {
@@ -733,6 +737,8 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
         isOpen={showMinimapBreakdown}
         onToggle={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
         onEditEmployee={(emp) => setEditingEmployee(emp)}
+        onEditTransaction={onEditTransaction}
+        onDeleteTransaction={onDeleteTransaction}
       />
 
       {/* Clean Unified Action Bar */}

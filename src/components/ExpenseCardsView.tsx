@@ -58,6 +58,8 @@ interface ExpenseCardsViewProps {
   onNavigateToSalary?: () => void;
   onSyncSalaryToExpenseCards?: (targetMonth: string) => void;
   onRegisterSalaryToTransactions?: (targetMonth: string) => void;
+  onEditTransaction?: (tx: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
 }
 
 export const TIMING_GROUP_CONFIG: Record<
@@ -136,6 +138,8 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   onNavigateToSalary,
   onSyncSalaryToExpenseCards,
   onRegisterSalaryToTransactions,
+  onEditTransaction,
+  onDeleteTransaction,
 }) => {
   const expenseCards = settings.expenseCards || [];
   const closedStores = settings.closedStores || [];
@@ -664,7 +668,22 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     const itemsToRegister: BatchExpenseItem[] = [];
     const targetCards = (registerAllCards || activeGroupFilter === 'ALL') ? expenseCards : filteredCards;
 
+    // Check if salary has already been registered in ledger for this month
+    const hasSalaryRegisteredInMonth = transactions.some(
+      (t) =>
+        t.type === 'expense' &&
+        (t.category === '役員報酬' || t.category === '給料手当' || t.category === '法定福利費') &&
+        ((t.date_from && t.date_from.startsWith(activeMonth)) ||
+          (t.date_to && t.date_to.startsWith(activeMonth)))
+    );
+
     targetCards.forEach((card) => {
+      // If salary has already been registered in ledger for this month and this is a salary card,
+      // skip auto-adding it during general batch register to avoid duplicating salary expenses!
+      if (card.timingGroup === 'salary' && hasSalaryRegisteredInMonth && activeGroupFilter !== 'salary') {
+        return;
+      }
+
       const defaultDate = (card.timingGroup === 'month_end' || card.id.includes('month-end'))
         ? `${activeMonth}-${new Date(Number(activeMonth.split('-')[0]), Number(activeMonth.split('-')[1]), 0).getDate()}`
         : (card.timingGroup === 'salary'
@@ -1094,6 +1113,8 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         totalAllCardsAmount={totalAllCardsAmount}
         isOpen={showMinimapBreakdown}
         onToggle={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+        onEditTransaction={onEditTransaction}
+        onDeleteTransaction={onDeleteTransaction}
       />
 
       {/* Active Month Clean Action Bar */}
