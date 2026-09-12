@@ -48,6 +48,7 @@ import {
   DEFAULT_SALARY_SETTINGS,
   SalaryTotalSummary 
 } from '../utils/salaryCalculator';
+import { SalaryMinimapBreakdown } from './SalaryMinimapBreakdown';
 
 // Format YYYY-MM to Japanese display (例: "2025年8月")
 const formatMonthLabel = (m: string) => {
@@ -156,6 +157,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   const handleMonthSelect = (m: string) => {
     setActiveMonth(m);
+    setShowMinimapBreakdown(true);
     onSelectFilter(m);
   };
 
@@ -225,6 +227,9 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   const [copySourceMonth, setCopySourceMonth] = useState<string>(prevMonth);
   const [activeTabSubView, setActiveTabSubView] = useState<'cards' | 'table'>('cards');
   const [storeFilter, setStoreFilter] = useState<string>('ALL');
+
+  // Toggle for Pattern B minimap constituent cards breakdown
+  const [showMinimapBreakdown, setShowMinimapBreakdown] = useState<boolean>(true);
 
   // Closed stores list
   const closedStores = settings.closedStores || [];
@@ -658,9 +663,18 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
             <Clock className="w-3.5 h-3.5 text-emerald-600" />
             {currentPeriod.label} 月別進捗ミニマップ (対象月を選択):
           </span>
-          <span className="text-[11px] text-gray-500 font-medium">
-            緑 = 給与計上済 / 灰 = 未計上
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 font-medium hidden sm:inline">
+              緑 = 給与計上済 / 灰 = 未計上
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+              className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-md border border-emerald-200 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <span>{showMinimapBreakdown ? '内訳カードを閉じる' : '内訳カードを表示'}</span>
+            </button>
+          </div>
         </div>
 
         {/* 12 Month Pills Grid */}
@@ -707,6 +721,19 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Pattern B: Minimap Constituent Cards Breakdown */}
+      <SalaryMinimapBreakdown
+        activeMonth={activeMonth}
+        calculationResults={calculationResults}
+        summary={summary}
+        isRegistered={monthRegistrationStatus.isSalaryRegistered}
+        salaryTxCount={monthRegistrationStatus.salaryTxCount}
+        transactions={transactions}
+        isOpen={showMinimapBreakdown}
+        onToggle={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+        onEditEmployee={(emp) => setEditingEmployee(emp)}
+      />
 
       {/* Clean Unified Action Bar */}
       <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">

@@ -25,6 +25,7 @@ import {
   PieChart,
   FileSpreadsheet
 } from 'lucide-react';
+import { SalesMinimapBreakdown } from './SalesMinimapBreakdown';
 
 interface StoreSalesCardBoardProps {
   transactions: Transaction[];
@@ -124,6 +125,9 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
 
   // Modal State for editing a store card
   const [modalStore, setModalStore] = useState<string | null>(null);
+
+  // Toggle for Pattern B minimap constituent cards breakdown
+  const [showMinimapBreakdown, setShowMinimapBreakdown] = useState<boolean>(true);
 
   // List of stores & closed stores filter
   const storeList = settings.stores && settings.stores.length > 0 ? settings.stores : ['太宰府店', '本店', '2号店', '全社共通'];
@@ -402,9 +406,18 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
             <Clock className="w-3.5 h-3.5 text-indigo-600" />
             {currentPeriod.label} 月別進捗ミニマップ (対象月を選択):
           </span>
-          <span className="text-[11px] text-gray-500 font-medium">
-            緑 = 全店舗入力完了 / 黄 = 一部入力 / 灰 = 未入力
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 font-medium hidden sm:inline">
+              緑 = 全店舗入力完了 / 黄 = 一部入力 / 灰 = 未入力
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+              className="px-2 py-0.5 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-md border border-emerald-200 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <span>{showMinimapBreakdown ? '内訳カードを閉じる' : '内訳カードを表示'}</span>
+            </button>
+          </div>
         </div>
 
         {/* 12 Month Pills */}
@@ -433,6 +446,7 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
                 type="button"
                 onClick={() => {
                   setActiveMonth(m);
+                  setShowMinimapBreakdown(true);
                   if (viewMode !== 'cards') setViewMode('cards');
                 }}
                 className={`py-2 px-1.5 rounded-xl text-center transition-all flex flex-col items-center justify-center border relative ${
@@ -466,6 +480,16 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
           })}
         </div>
       </div>
+
+      {/* Pattern B: Minimap Constituent Cards Breakdown */}
+      <SalesMinimapBreakdown
+        activeMonth={activeMonth}
+        currentMonthCards={currentMonthCards.cards}
+        monthTotal={matrixData.monthTotals[activeMonth] || 0}
+        isOpen={showMinimapBreakdown}
+        onToggle={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+        onOpenStoreModal={(store) => setModalStore(store)}
+      />
 
       {/* ========================================================= */}
       {/* MODE 1: MONTHLY CARD VIEW (店舗×月 カードボード)          */}

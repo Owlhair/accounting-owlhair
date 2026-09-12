@@ -34,6 +34,7 @@ import {
   AppSettings,
   FiscalPeriod,
 } from '../types';
+import { ExpenseMinimapBreakdown } from './ExpenseMinimapBreakdown';
 
 interface BatchExpenseItem {
   title: string;
@@ -212,6 +213,9 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   // Filter by timing group
   const [activeGroupFilter, setActiveGroupFilter] = useState<string>('ALL');
 
+  // Toggle for Pattern B minimap constituent cards breakdown
+  const [showMinimapBreakdown, setShowMinimapBreakdown] = useState<boolean>(true);
+
   // Input states keyed by "cardId" or "cardId_subItemId"
   const [inputs, setInputs] = useState<Record<string, { amount: string; date: string; memo: string; isSelected: boolean }>>(() => {
     const initial: Record<string, { amount: string; date: string; memo: string; isSelected: boolean }> = {};
@@ -321,6 +325,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   // Update input dates when month changes
   const handleMonthChange = (newMonth: string) => {
     setActiveMonth(newMonth);
+    setShowMinimapBreakdown(true);
     setInputs((prev) => {
       const next = { ...prev };
       Object.keys(next).forEach((k) => {
@@ -1017,9 +1022,18 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             <Clock className="w-3.5 h-3.5 text-rose-600" />
             {currentPeriod.label} 月別進捗ミニマップ (対象月を選択):
           </span>
-          <span className="text-[11px] text-gray-500 font-medium">
-            緑 = 経費計上済 / 灰 = 未計上
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-500 font-medium hidden sm:inline">
+              緑 = 経費計上済 / 灰 = 未計上
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+              className="px-2 py-0.5 text-[11px] font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 rounded-md border border-rose-200 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <span>{showMinimapBreakdown ? '内訳カードを閉じる' : '内訳カードを表示'}</span>
+            </button>
+          </div>
         </div>
 
         {/* 12 Month Pills Grid */}
@@ -1070,6 +1084,17 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* Pattern B: Minimap Constituent Cards Breakdown */}
+      <ExpenseMinimapBreakdown
+        activeMonth={activeMonth}
+        transactions={transactions}
+        expenseCards={expenseCards}
+        inputs={inputs}
+        totalAllCardsAmount={totalAllCardsAmount}
+        isOpen={showMinimapBreakdown}
+        onToggle={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
+      />
 
       {/* Active Month Clean Action Bar */}
       <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-3">
