@@ -76,9 +76,9 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
     const duplicateGroups: Record<string, Transaction[]> = {};
 
     activeMonthTxs.forEach((tx) => {
-      // Group key: for salary categories, group by category; for other expenses, group by category + amount or description
-      const isSalaryCat = tx.category === '役員報酬' || tx.category === '給料手当' || tx.category === '法定福利費';
-      const key = isSalaryCat ? `salary_${tx.category}` : `exact_${tx.category}_${tx.amount}_${tx.store || ''}`;
+      // Group key: detect duplicates only when category, amount, and description/store closely match
+      const descKey = (tx.description || '').replace(/\s+/g, '').slice(0, 10);
+      const key = `${tx.category}_${tx.amount}_${descKey}_${tx.store || ''}`;
       if (!duplicateGroups[key]) {
         duplicateGroups[key] = [];
       }

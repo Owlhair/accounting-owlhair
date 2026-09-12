@@ -115,14 +115,34 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
   // 3. 給与
   {
     id: 'ec-3',
-    title: '役員報酬・スタッフ給料',
+    title: '役員報酬・スタッフ給与（支給日振込）',
     paymentMethod: '銀行振込',
     category: '給料手当',
     timingGroup: 'salary',
     costType: 'fixed',
-    defaultAmount: 500000,
+    defaultAmount: 750000,
     store: '全社共通',
-    memo: '毎月25日振込',
+    memo: '毎月25日振込 給与・役員報酬',
+    subItems: [
+      {
+        id: 'sub-sal-exec-def',
+        name: '役員報酬（定期同額給与）',
+        category: '役員報酬',
+        costType: 'fixed',
+        defaultAmount: 500000,
+        store: '全社共通',
+        memo: '役員報酬',
+      },
+      {
+        id: 'sub-sal-staff-def',
+        name: 'スタッフ給料手当',
+        category: '給料手当',
+        costType: 'fixed',
+        defaultAmount: 250000,
+        store: '全社共通',
+        memo: 'スタッフ給与',
+      },
+    ],
   },
   // 4. 月始あたりに払うもの
   {
@@ -378,14 +398,28 @@ export const loadSettings = (): AppSettings => {
 
     const closedStores: string[] = Array.isArray(parsed.closedStores) ? parsed.closedStores : [];
 
+    let loadedExpenseCards: ExpenseCard[] = Array.isArray(parsed.expenseCards) && parsed.expenseCards.length > 0 
+      ? parsed.expenseCards 
+      : DEFAULT_EXPENSE_CARDS;
+
+    // Ensure essential timing groups (especially salary) are never missing
+    const hasSalaryCard = loadedExpenseCards.some((c: ExpenseCard) => c.timingGroup === 'salary');
+    if (!hasSalaryCard) {
+      const defaultSalaryCard = DEFAULT_EXPENSE_CARDS.find((c) => c.timingGroup === 'salary');
+      if (defaultSalaryCard) {
+        loadedExpenseCards = [...loadedExpenseCards, defaultSalaryCard];
+      }
+    }
+
     return {
       salesCategories: parsed.salesCategories || DEFAULT_SALES_CATEGORIES,
       expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
       paymentMethods,
       stores,
       closedStores,
-      expenseCards: parsed.expenseCards && parsed.expenseCards.length > 0 ? parsed.expenseCards : DEFAULT_EXPENSE_CARDS,
+      expenseCards: loadedExpenseCards,
       salaryEmployees: parsed.salaryEmployees && parsed.salaryEmployees.length > 0 ? parsed.salaryEmployees : DEFAULT_SALARY_EMPLOYEES,
+      monthlySalarySnapshots: parsed.monthlySalarySnapshots || {},
       salarySettings: parsed.salarySettings || DEFAULT_SALARY_SETTINGS,
       fiscalSettings: {
         fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
@@ -402,6 +436,7 @@ export const loadSettings = (): AppSettings => {
       closedStores: [],
       expenseCards: DEFAULT_EXPENSE_CARDS,
       salaryEmployees: DEFAULT_SALARY_EMPLOYEES,
+      monthlySalarySnapshots: {},
       salarySettings: DEFAULT_SALARY_SETTINGS,
       fiscalSettings: DEFAULT_FISCAL_SETTINGS,
     };

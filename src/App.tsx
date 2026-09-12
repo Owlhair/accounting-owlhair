@@ -519,7 +519,7 @@ export default function App() {
     );
   };
 
-  // Handler: Save Salary Employees (with automatic silent sync to Expense Cards & Transactions)
+  // Handler: Save Salary Employees (persists to monthly snapshot & updates card defaults without overwriting ledger)
   const handleSaveSalaryEmployees = (newEmployees: SalaryEmployee[], targetMonth?: string) => {
     const curMonth = targetMonth || (selectedFilter.includes('-') && selectedFilter.length === 7 ? selectedFilter : new Date().toISOString().substring(0, 7));
     const snapshots = { ...(settings.monthlySalarySnapshots || {}) };
@@ -547,11 +547,11 @@ export default function App() {
     saveSettings(updated);
     syncSaveSettingsToFirestore(updated);
 
-    // Automatically sync expense cards AND update ledger transactions quietly (no button push needed!)
-    handleRegisterSalaryToTransactions(summary, curMonth, results, true);
+    // Sync expense cards default figures quietly (do NOT silently rewrite ledger transactions!)
+    handleSyncSalaryToExpenseCards(summary, curMonth, true);
   };
 
-  // Handler: Save Salary Settings (with automatic silent recalculation)
+  // Handler: Save Salary Settings (updates card defaults without overwriting ledger)
   const handleSaveSalarySettings = (newSalarySettings: SalarySettings) => {
     const updated: AppSettings = {
       ...settings,
@@ -566,7 +566,7 @@ export default function App() {
     if (emps.length > 0) {
       const results = emps.map(e => calculateEmployeeSalary(e, newSalarySettings));
       const summary = calculateTotalSalarySummary(results);
-      handleRegisterSalaryToTransactions(summary, curMonth, results, true);
+      handleSyncSalaryToExpenseCards(summary, curMonth, true);
     }
   };
 
@@ -861,6 +861,30 @@ export default function App() {
       }
     }
 
+    // Ensure salary card always has both sub-items even if amounts are zero
+    if (salarySubItems.length === 0) {
+      salarySubItems.push(
+        {
+          id: `sub-sal-exec-def`,
+          name: `役員報酬（定期同額給与・${summary.executiveCount || 1}名）`,
+          category: '役員報酬',
+          costType: 'fixed',
+          defaultAmount: summary.totalExecutiveRemuneration || 0,
+          store: '全社共通',
+          memo: `役員報酬`,
+        },
+        {
+          id: `sub-sal-staff-def`,
+          name: `スタッフ給料手当（${summary.staffCount || 1}名）`,
+          category: '給料手当',
+          costType: 'fixed',
+          defaultAmount: summary.totalStaffSalary || 0,
+          store: '全社共通',
+          memo: `スタッフ給与`,
+        }
+      );
+    }
+
     salaryCard.subItems = salarySubItems;
     salaryCard.defaultAmount = summary.totalGross;
 
@@ -954,11 +978,15 @@ export default function App() {
     monthEndCard.subItems = existingSubItems;
     monthEndCard.defaultAmount = summary.monthEndSummary.totalMonthEndPayment;
 
-    const updatedCards = currentCards.map(c => {
+    const hasSalary = currentCards.some(c => c.id === salaryCard!.id);
+    let updatedCards = currentCards.map(c => {
       if (c.id === salaryCard!.id) return salaryCard!;
       if (c.id === monthEndCard!.id) return monthEndCard!;
       return c;
     });
+    if (!hasSalary) {
+      updatedCards = [salaryCard!, ...updatedCards];
+    }
 
     const updatedSettings: AppSettings = {
       ...settings,
@@ -969,17 +997,13 @@ export default function App() {
     saveSettings(updatedSettings);
     syncSaveSettingsToFirestore(updatedSettings);
 
-    // Automatically register transactions to ledger so that total expense amounts across all views (Dashboard, Monthly Progress, PL, Transactions) update immediately!
     if (!silent) {
-      handleRegisterSalaryToTransactions(summary, targetMonth, summary ? undefined : undefined);
       handleSendMessage(
-        `✅ 【給与・月末支払いを出納帳及び経費カードへ反映しました】\n` +
+        `✅ 【給与計算結果を経費カード設定へ反映しました】\n` +
         `・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()} (${summary.executiveCount}名)\n` +
         `・スタッフ給料手当: ¥${summary.totalStaffSalary.toLocaleString()} (${summary.staffCount}名)\n` +
-        `・社会保険料納付（会社+本人）: ¥${socialInsTotal.toLocaleString()}\n` +
-        `・雇用保険会社負担: ¥${laborInsTotal.toLocaleString()}\n` +
-        `・源泉税・住民税納付: ¥${taxesTotal.toLocaleString()}\n` +
-        `経費カードの品目金額、月別進捗、試算表、および出納帳の経費合計金額へ即座に反映されました。`
+        `・月末社会保険料等納付: ¥${socialInsTotal.toLocaleString()}\n` +
+        `経費カードの入力デフォルト値に連動しました。（※出納帳へ確定登録する場合は「一括計上」または給与画面の「出納帳へ計上」を押してください）`
       );
     }
   };

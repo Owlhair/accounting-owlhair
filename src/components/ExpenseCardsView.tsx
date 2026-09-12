@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   CreditCard,
   Calendar,
@@ -35,6 +35,7 @@ import {
   FiscalPeriod,
 } from '../types';
 import { ExpenseMinimapBreakdown } from './ExpenseMinimapBreakdown';
+import { DEFAULT_EXPENSE_CARDS } from '../utils/storage';
 
 interface BatchExpenseItem {
   title: string;
@@ -141,7 +142,43 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   onEditTransaction,
   onDeleteTransaction,
 }) => {
-  const expenseCards = settings.expenseCards || [];
+  const expenseCards = useMemo(() => {
+    let cards = settings.expenseCards && settings.expenseCards.length > 0 ? settings.expenseCards : DEFAULT_EXPENSE_CARDS;
+    const hasSalary = cards.some((c) => c.timingGroup === 'salary');
+    if (!hasSalary) {
+      const defaultSalaryCard = DEFAULT_EXPENSE_CARDS.find((c) => c.timingGroup === 'salary') || {
+        id: 'ec-salary-board',
+        title: '役員報酬・スタッフ給与（支給日振込）',
+        timingGroup: 'salary' as const,
+        paymentMethod: '銀行振込',
+        category: '給料手当',
+        store: '全社共通',
+        memo: `毎月${settings.salarySettings?.payDay || 25}日振込 給与・役員報酬`,
+        subItems: [
+          {
+            id: 'sub-sal-exec-def',
+            name: '役員報酬（定期同額給与）',
+            category: '役員報酬',
+            costType: 'fixed' as const,
+            defaultAmount: 500000,
+            store: '全社共通',
+            memo: '役員報酬',
+          },
+          {
+            id: 'sub-sal-staff-def',
+            name: 'スタッフ給料手当',
+            category: '給料手当',
+            costType: 'fixed' as const,
+            defaultAmount: 250000,
+            store: '全社共通',
+            memo: 'スタッフ給与',
+          },
+        ],
+      };
+      cards = [defaultSalaryCard, ...cards];
+    }
+    return cards;
+  }, [settings.expenseCards, settings.salarySettings]);
   const closedStores = settings.closedStores || [];
 
   // Active Fiscal Period
@@ -220,36 +257,91 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   // Toggle for Pattern B minimap constituent cards breakdown
   const [showMinimapBreakdown, setShowMinimapBreakdown] = useState<boolean>(true);
 
-  // Input states keyed by "cardId" or "cardId_subItemId"
-  const [inputs, setInputs] = useState<Record<string, { amount: string; date: string; memo: string; isSelected: boolean }>>(() => {
-    const initial: Record<string, { amount: string; date: string; memo: string; isSelected: boolean }> = {};
-    expenseCards.forEach((card) => {
-      const defaultDate = (card.timingGroup === 'month_end' || card.id.includes('month-end'))
-        ? `${activeMonth}-${new Date(Number(activeMonth.split('-')[0]), Number(activeMonth.split('-')[1]), 0).getDate()}`
-        : (card.timingGroup === 'salary'
-            ? `${activeMonth}-${String(settings.salarySettings?.payDay || 25).padStart(2, '0')}`
-            : `${activeMonth}-25`);
+  // Helper to build inputs for a specific month
+  const buildInputsForMonth = useCallback(
+    (targetMonth: string, cards: ExpenseCard[]) => {
+      const initial: Record<string, { amount: string; date: string; memo: string; isSelected: boolean }> = {};
 
-      if (card.subItems && card.subItems.length > 0) {
-        card.subItems.forEach((sub) => {
-          const key = `${card.id}_${sub.id}`;
+      // Transactions for this target month in the ledger
+      const monthTxs = transactions.filter(
+        (t) =>
+          t.type === 'expense' &&
+          ((t.date_from && t.date_from.startsWith(targetMonth)) ||
+            (t.date_to && t.date_to.startsWith(targetMonth)))
+      );
+
+      cards.forEach((card) => {
+        const defaultDate = (card.timingGroup === 'month_end' || card.id.includes('month-end'))
+          ? `${targetMonth}-${new Date(Number(targetMonth.split('-')[0]), Number(targetMonth.split('-')[1]), 0).getDate()}`
+          : (card.timingGroup === 'salary'
+              ? `${targetMonth}-${String(settings.salarySettings?.payDay || 25).padStart(2, '0')}`
+              : `${targetMonth}-25`);
+
+        if (card.subItems && card.subItems.length > 0) {
+          card.subItems.forEach((sub) => {
+            const key = `${card.id}_${sub.id}`;
+            if (monthTxs.length > 0) {
+              const matchedTx = monthTxs.find(
+                (tx) =>
+                  (tx.description && tx.description.includes(sub.name)) ||
+                  (tx.category === sub.category && (!sub.store || sub.store === '全社共通' || tx.store === sub.store))
+              );
+              if (matchedTx) {
+                initial[key] = {
+                  amount: String(matchedTx.amount || 0),
+                  date: matchedTx.date_from || matchedTx.date_to || defaultDate,
+                  memo: matchedTx.memo || sub.memo || '',
+                  isSelected: true,
+                };
+                return;
+              }
+            }
+
+            const isFixedOrSalary = card.timingGroup === 'salary' || card.timingGroup === 'month_end' || sub.costType === 'fixed';
+            initial[key] = {
+              amount: isFixedOrSalary && sub.defaultAmount ? String(sub.defaultAmount) : '',
+              date: defaultDate,
+              memo: sub.memo || '',
+              isSelected: true,
+            };
+          });
+        } else {
+          const key = card.id;
+          if (monthTxs.length > 0) {
+            const matchedTx = monthTxs.find(
+              (tx) =>
+                (tx.description && tx.description.includes(card.title)) ||
+                (card.category && tx.category === card.category)
+            );
+            if (matchedTx) {
+              initial[key] = {
+                amount: String(matchedTx.amount || 0),
+                date: matchedTx.date_from || matchedTx.date_to || defaultDate,
+                memo: matchedTx.memo || card.memo || '',
+                isSelected: true,
+              };
+              return;
+            }
+          }
+
+          const isFixedOrSalary = card.timingGroup === 'salary' || card.timingGroup === 'month_end' || card.costType === 'fixed';
           initial[key] = {
-            amount: sub.defaultAmount ? String(sub.defaultAmount) : '',
+            amount: isFixedOrSalary && card.defaultAmount ? String(card.defaultAmount) : '',
             date: defaultDate,
-            memo: sub.memo || '',
+            memo: card.memo || '',
             isSelected: true,
           };
-        });
-      } else {
-        initial[card.id] = {
-          amount: card.defaultAmount ? String(card.defaultAmount) : '',
-          date: defaultDate,
-          memo: card.memo || '',
-          isSelected: true,
-        };
-      }
-    });
-    return initial;
+        }
+      });
+
+      return initial;
+    },
+    [transactions, settings.salarySettings]
+  );
+
+  // Input states keyed by "cardId" or "cardId_subItemId"
+  const [inputs, setInputs] = useState<Record<string, { amount: string; date: string; memo: string; isSelected: boolean }>>(() => {
+    return buildInputsForMonth(activeMonth, expenseCards);
   });
 
   // Sync inputs with expenseCards whenever expenseCards updates (e.g. from salary sync or settings edit)
@@ -277,8 +369,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                 isSelected: true,
               };
               changed = true;
-            } else if (card.timingGroup === 'salary' || card.timingGroup === 'month_end' || sub.costType === 'fixed') {
-              // Always keep salary / month_end / fixed amounts synchronized if defaultAmount is present and different
+            } else if (card.timingGroup === 'salary' || card.timingGroup === 'month_end') {
               if (sub.defaultAmount && next[key].amount !== targetAmount) {
                 next[key] = {
                   ...next[key],
@@ -301,7 +392,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               isSelected: true,
             };
             changed = true;
-          } else if (card.timingGroup === 'salary' || card.timingGroup === 'month_end' || card.costType === 'fixed') {
+          } else if (card.timingGroup === 'salary' || card.timingGroup === 'month_end') {
             if (card.defaultAmount && next[key].amount !== targetAmount) {
               next[key] = {
                 ...next[key],
@@ -319,27 +410,11 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     });
   }, [expenseCards, activeMonth, settings.salarySettings]);
 
-  // Auto-sync salary calculations to cards on month change
-  React.useEffect(() => {
-    if (onSyncSalaryToExpenseCards) {
-      onSyncSalaryToExpenseCards(activeMonth);
-    }
-  }, [activeMonth]);
-
-  // Update input dates when month changes
+  // Update input dates and amounts cleanly when month changes
   const handleMonthChange = (newMonth: string) => {
     setActiveMonth(newMonth);
     setShowMinimapBreakdown(true);
-    setInputs((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((k) => {
-        next[k] = {
-          ...next[k],
-          date: `${newMonth}-25`,
-        };
-      });
-      return next;
-    });
+    setInputs(buildInputsForMonth(newMonth, expenseCards));
   };
 
   // Toast
@@ -567,6 +642,43 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     showToast(`品目「${newSubItem.name}」を複製しました`);
   };
 
+  // Restore default salary card if missing or removed
+  const handleRestoreSalaryCard = () => {
+    const defaultSalaryCard = DEFAULT_EXPENSE_CARDS.find((c) => c.timingGroup === 'salary') || {
+      id: 'ec-salary-board',
+      title: '役員報酬・スタッフ給与（支給日振込）',
+      timingGroup: 'salary' as const,
+      paymentMethod: '銀行振込',
+      category: '給料手当',
+      store: '全社共通',
+      memo: `毎月${settings.salarySettings?.payDay || 25}日振込 給与・役員報酬`,
+      subItems: [
+        {
+          id: 'sub-sal-exec-def',
+          name: '役員報酬（定期同額給与）',
+          category: '役員報酬',
+          costType: 'fixed' as const,
+          defaultAmount: 500000,
+          store: '全社共通',
+          memo: '役員報酬',
+        },
+        {
+          id: 'sub-sal-staff-def',
+          name: 'スタッフ給料手当',
+          category: '給料手当',
+          costType: 'fixed' as const,
+          defaultAmount: 250000,
+          store: '全社共通',
+          memo: 'スタッフ給与',
+        },
+      ],
+    };
+
+    const updated = [defaultSalaryCard, ...expenseCards.filter((c) => c.timingGroup !== 'salary')];
+    onSaveExpenseCards(updated);
+    showToast('役員報酬・給与カードを復元しました');
+  };
+
   // Calculate card subtotal for a specific card
   const getCardEnteredSubtotal = (card: ExpenseCard) => {
     let subtotal = 0;
@@ -734,6 +846,20 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
       }
     });
 
+    // Check if expenses have already been registered for this month
+    const existingMonthExpenses = transactions.filter(
+      (t) =>
+        t.type === 'expense' &&
+        ((t.date_from && t.date_from.startsWith(activeMonth)) ||
+          (t.date_to && t.date_to.startsWith(activeMonth)))
+    );
+    if (existingMonthExpenses.length > 0) {
+      const ok = window.confirm(
+        `【確認】${activeMonth}月度には既に出納帳に ${existingMonthExpenses.length}件の経費データが登録されています。\n重複して計上しますか？\n（重複を避けたい場合は「キャンセル」を押してください）`
+      );
+      if (!ok) return;
+    }
+
     if (itemsToRegister.length === 0) {
       alert('登録対象の金額が入力されていません。金額を入力してください。');
       return;
@@ -794,6 +920,21 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           memo: [card.memo, input?.memo].filter(Boolean).join(' / '),
         });
       }
+    }
+
+    // Check if transactions already exist for this card in this month
+    const existingCardTxs = transactions.filter(
+      (t) =>
+        t.type === 'expense' &&
+        ((t.date_from && t.date_from.startsWith(activeMonth)) ||
+          (t.date_to && t.date_to.startsWith(activeMonth))) &&
+        (t.description?.includes(card.title) || (card.category && t.category === card.category))
+    );
+    if (existingCardTxs.length > 0) {
+      const ok = window.confirm(
+        `【確認】「${card.title}」に関する経費は${activeMonth}月度に既に出納帳に登録されています（${existingCardTxs.length}件）。\n追加で計上しますか？`
+      );
+      if (!ok) return;
     }
 
     if (itemsToRegister.length === 0) {
@@ -1240,9 +1381,52 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
       {/* VIEW 1: CARD GRID LAYOUT (ユーザー要望のカード型！)                       */}
       {/* ========================================================================= */}
       {viewLayout === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredCards.map((card) => {
-            const groupInfo = TIMING_GROUP_CONFIG[card.timingGroup] || TIMING_GROUP_CONFIG.other;
+        filteredCards.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                {activeGroupFilter === 'salary' ? '給与・役員報酬カードが表示されていません' : '該当する経費カードがありません'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {activeGroupFilter === 'salary'
+                  ? '給与カードを復元して表示できます。'
+                  : 'フィルター条件を「すべて」にするか、カードを新規作成してください。'}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3">
+              {activeGroupFilter === 'salary' ? (
+                <button
+                  type="button"
+                  onClick={handleRestoreSalaryCard}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs"
+                >
+                  給与・役員報酬カードを復元
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setActiveGroupFilter('ALL')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  すべてのカードを表示
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleOpenAddCard}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs"
+              >
+                + 新規カードを追加
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredCards.map((card) => {
+              const groupInfo = TIMING_GROUP_CONFIG[card.timingGroup] || TIMING_GROUP_CONFIG.other;
             const hasSubItems = card.subItems && card.subItems.length > 0;
             const cardSubtotal = getCardEnteredSubtotal(card);
 
@@ -1501,7 +1685,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* ========================================================================= */}
       {/* VIEW 2: LIST VIEW (コンパクトな行一覧)                                    */}

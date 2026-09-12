@@ -77,8 +77,9 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
     const groups: Record<string, Transaction[]> = {};
 
     salaryTxs.forEach((t) => {
-      // Group by category (e.g. multiple 役員報酬 or multiple 給料手当 or multiple 法定福利費)
-      const key = t.category || 'その他';
+      // Group by category, exact amount, and clean description prefix so genuine duplicates are detected accurately
+      const cleanDesc = (t.description || '').replace(/\s+/g, '').slice(0, 10);
+      const key = `${t.category}_${t.amount}_${cleanDesc}_${t.store || ''}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(t);
     });

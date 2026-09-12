@@ -46,6 +46,7 @@ import {
   calculateEmployeeSalary, 
   calculateTotalSalarySummary, 
   DEFAULT_SALARY_SETTINGS,
+  DEFAULT_SALARY_EMPLOYEES,
   SalaryTotalSummary 
 } from '../utils/salaryCalculator';
 import { SalaryMinimapBreakdown } from './SalaryMinimapBreakdown';
@@ -177,12 +178,15 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   const prevMonth = useMemo(() => getPreviousMonth(activeMonth), [activeMonth]);
   const nextMonth = useMemo(() => getNextMonth(activeMonth), [activeMonth]);
 
-  // Helper to get employees for a specific month (from snapshots, fallback to current settings)
+  // Helper to get employees for a specific month (from snapshots, fallback to current settings, fallback to default)
   const getEmployeesForMonth = (targetMonth: string): SalaryEmployee[] => {
-    if (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth]) {
+    if (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth] && settings.monthlySalarySnapshots[targetMonth].length > 0) {
       return settings.monthlySalarySnapshots[targetMonth];
     }
-    return settings.salaryEmployees || [];
+    if (settings.salaryEmployees && settings.salaryEmployees.length > 0) {
+      return settings.salaryEmployees;
+    }
+    return DEFAULT_SALARY_EMPLOYEES;
   };
 
   // Employees for current activeMonth
@@ -932,10 +936,53 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
       {/* Employee Cards Grid View */}
       {activeTabSubView === 'cards' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {filteredResults.map((result) => {
-            const emp = result.employee;
-            const isExecutive = emp.type === 'executive';
+        filteredResults.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                {storeFilter !== 'ALL' ? `「${storeFilter}」のスタッフが登録されていません` : '給与メンバーが表示されていません'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {storeFilter !== 'ALL'
+                  ? '「全店舗・全社」を表示するか、新規スタッフを追加してください。'
+                  : '標準サンプルメンバーを復元するか、新しくスタッフを追加してください。'}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3">
+              {storeFilter !== 'ALL' ? (
+                <button
+                  type="button"
+                  onClick={() => setStoreFilter('ALL')}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  すべての店舗を表示
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => saveEmployees(DEFAULT_SALARY_EMPLOYEES)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+                >
+                  標準サンプルメンバーを復元
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleCreateEmployee}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+              >
+                + 新規スタッフを追加
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {filteredResults.map((result) => {
+              const emp = result.employee;
+              const isExecutive = emp.type === 'executive';
 
             return (
               <div
@@ -1280,6 +1327,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
             );
           })}
         </div>
+        )
       ) : (
         /* Table View */
         <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto shadow-2xs">
