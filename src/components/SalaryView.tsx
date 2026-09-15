@@ -53,7 +53,7 @@ import { SalaryMinimapBreakdown } from './SalaryMinimapBreakdown';
 
 // Format YYYY-MM to Japanese display (例: "2025年8月")
 const formatMonthLabel = (m: string) => {
-  if (!m) return '';
+  if (!m || typeof m !== 'string') return '';
   const parts = m.split('-');
   if (parts.length >= 2) {
     return `${parts[0]}年${parseInt(parts[1], 10)}月`;
@@ -63,8 +63,12 @@ const formatMonthLabel = (m: string) => {
 
 // Calculate previous month YYYY-MM
 const getPreviousMonth = (m: string): string => {
-  if (!m || !m.includes('-')) return '2025-07';
-  const [y, mon] = m.split('-').map(Number);
+  if (!m || typeof m !== 'string' || !m.includes('-')) return '2025-07';
+  const parts = m.split('-');
+  if (parts.length !== 2) return '2025-07';
+  const y = parseInt(parts[0], 10);
+  const mon = parseInt(parts[1], 10);
+  if (isNaN(y) || isNaN(mon) || mon < 1 || mon > 12) return '2025-07';
   const prevDate = new Date(y, mon - 2, 1);
   const py = prevDate.getFullYear();
   const pm = String(prevDate.getMonth() + 1).padStart(2, '0');
@@ -73,8 +77,12 @@ const getPreviousMonth = (m: string): string => {
 
 // Calculate next month YYYY-MM
 const getNextMonth = (m: string): string => {
-  if (!m || !m.includes('-')) return '2025-09';
-  const [y, mon] = m.split('-').map(Number);
+  if (!m || typeof m !== 'string' || !m.includes('-')) return '2025-09';
+  const parts = m.split('-');
+  if (parts.length !== 2) return '2025-09';
+  const y = parseInt(parts[0], 10);
+  const mon = parseInt(parts[1], 10);
+  if (isNaN(y) || isNaN(mon) || mon < 1 || mon > 12) return '2025-09';
   const nextDate = new Date(y, mon, 1);
   const ny = nextDate.getFullYear();
   const nm = String(nextDate.getMonth() + 1).padStart(2, '0');
@@ -114,31 +122,37 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   onEditTransaction,
   onDeleteTransaction,
 }) => {
+  // Fallback period if fiscalPeriods is empty or uninitialized
+  const defaultPeriod: FiscalPeriod = useMemo(() => ({
+    periodNumber: 1,
+    label: '第1期',
+    key: 'period-1',
+    startDate: '2024-04-01',
+    endDate: '2025-03-31',
+    startMonth: '2024-04',
+    endMonth: '2025-03',
+    months: ['2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03'],
+  }), []);
+
   // Current active fiscal period (matches StoreSalesCardBoard & ExpenseCardsView)
-  const currentPeriod = useMemo(() => {
-    if (selectedFilter.startsWith('period-')) {
-      return fiscalPeriods.find(p => p.key === selectedFilter) || fiscalPeriods[0];
+  const currentPeriod: FiscalPeriod = useMemo(() => {
+    const validPeriods = Array.isArray(fiscalPeriods) && fiscalPeriods.length > 0 ? fiscalPeriods : [defaultPeriod];
+    if (selectedFilter && typeof selectedFilter === 'string' && selectedFilter.startsWith('period-')) {
+      return validPeriods.find(p => p.key === selectedFilter) || validPeriods[0] || defaultPeriod;
     }
-    const containingPeriod = fiscalPeriods.find(p => p.months && p.months.includes(selectedFilter));
-    if (containingPeriod) return containingPeriod;
-    return fiscalPeriods[0] || {
-      periodNumber: 1,
-      label: '第1期',
-      key: 'period-1',
-      startDate: '2024-04-01',
-      endDate: '2025-03-31',
-      startMonth: '2024-04',
-      endMonth: '2025-03',
-      months: ['2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03'],
-    };
-  }, [selectedFilter, fiscalPeriods]);
+    if (selectedFilter && typeof selectedFilter === 'string' && selectedFilter.includes('-') && selectedFilter.length === 7) {
+      const containingPeriod = validPeriods.find(p => Array.isArray(p.months) && p.months.includes(selectedFilter));
+      if (containingPeriod) return containingPeriod;
+    }
+    return validPeriods[0] || defaultPeriod;
+  }, [selectedFilter, fiscalPeriods, defaultPeriod]);
 
   // Selected Month within current period
   const [activeMonth, setActiveMonth] = useState<string>(() => {
-    if (selectedFilter && !selectedFilter.startsWith('period-') && selectedFilter !== 'ALL') {
+    if (selectedFilter && typeof selectedFilter === 'string' && !selectedFilter.startsWith('period-') && selectedFilter !== 'ALL' && selectedFilter.includes('-')) {
       return selectedFilter;
     }
-    if (currentPeriod?.months?.length > 0) {
+    if (currentPeriod?.months && currentPeriod.months.length > 0) {
       const thisMonth = new Date().toISOString().substring(0, 7);
       if (currentPeriod.months.includes(thisMonth)) return thisMonth;
       return currentPeriod.months[currentPeriod.months.length - 1] || '2025-08';
@@ -148,14 +162,21 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   // Keep activeMonth in sync when period changes
   React.useEffect(() => {
-    if (currentPeriod?.months?.length > 0 && !currentPeriod.months.includes(activeMonth)) {
+    if (currentPeriod?.months && currentPeriod.months.length > 0 && !currentPeriod.months.includes(activeMonth)) {
       setActiveMonth(currentPeriod.months[0]);
     }
   }, [currentPeriod, activeMonth]);
 
   // When selectedFilter changes from external props (e.g. navbar or other tab)
   React.useEffect(() => {
-    if (selectedFilter && !selectedFilter.startsWith('period-') && selectedFilter !== 'ALL' && selectedFilter !== activeMonth) {
+    if (
+      selectedFilter &&
+      typeof selectedFilter === 'string' &&
+      !selectedFilter.startsWith('period-') &&
+      selectedFilter !== 'ALL' &&
+      selectedFilter.includes('-') &&
+      selectedFilter !== activeMonth
+    ) {
       setActiveMonth(selectedFilter);
     }
   }, [selectedFilter]);
@@ -168,8 +189,8 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   const handlePeriodSelect = (periodKey: string) => {
     onSelectFilter(periodKey);
-    const target = fiscalPeriods.find(p => p.key === periodKey);
-    if (target && target.months.length > 0) {
+    const target = (fiscalPeriods || []).find(p => p.key === periodKey);
+    if (target && Array.isArray(target.months) && target.months.length > 0) {
       setActiveMonth(target.months[0]);
     }
   };
@@ -180,10 +201,10 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   // Helper to get employees for a specific month (from snapshots, fallback to current settings, fallback to default)
   const getEmployeesForMonth = (targetMonth: string): SalaryEmployee[] => {
-    if (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth] && settings.monthlySalarySnapshots[targetMonth].length > 0) {
+    if (settings?.monthlySalarySnapshots && Array.isArray(settings.monthlySalarySnapshots[targetMonth]) && settings.monthlySalarySnapshots[targetMonth].length > 0) {
       return settings.monthlySalarySnapshots[targetMonth];
     }
-    if (settings.salaryEmployees && settings.salaryEmployees.length > 0) {
+    if (settings?.salaryEmployees && Array.isArray(settings.salaryEmployees) && settings.salaryEmployees.length > 0) {
       return settings.salaryEmployees;
     }
     return DEFAULT_SALARY_EMPLOYEES;
@@ -192,16 +213,17 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   // Employees for current activeMonth
   const employees = useMemo(() => {
     return getEmployeesForMonth(activeMonth);
-  }, [settings.monthlySalarySnapshots, settings.salaryEmployees, activeMonth]);
+  }, [settings?.monthlySalarySnapshots, settings?.salaryEmployees, activeMonth]);
 
-  const salarySettings = useMemo(() => settings.salarySettings || DEFAULT_SALARY_SETTINGS, [settings.salarySettings]);
+  const salarySettings = useMemo(() => settings?.salarySettings || DEFAULT_SALARY_SETTINGS, [settings?.salarySettings]);
 
   // Monthly totals for 12-month progress minimap
   const salaryMonthTotals = useMemo(() => {
     const totals: Record<string, { total: number; isRegistered: boolean; count: number }> = {};
-    currentPeriod.months.forEach((m) => {
+    const monthsList = Array.isArray(currentPeriod?.months) ? currentPeriod.months : [];
+    monthsList.forEach((m) => {
       // 1. Transactions matching salary
-      const txs = transactions.filter(
+      const txs = (transactions || []).filter(
         (t) =>
           t.type === 'expense' &&
           (t.category === '役員報酬' || t.category === '給料手当') &&
@@ -211,17 +233,21 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       let total = txs.reduce((acc, t) => acc + (t.amount || 0), 0);
 
       // If no transaction yet, calculate from snapshot if available
-      if (total === 0 && settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[m]) {
+      if (total === 0 && settings?.monthlySalarySnapshots && Array.isArray(settings.monthlySalarySnapshots[m])) {
         const snap = settings.monthlySalarySnapshots[m];
-        const res = snap.map(emp => calculateEmployeeSalary(emp, salarySettings));
-        const sum = calculateTotalSalarySummary(res);
-        total = sum.totalGross;
+        try {
+          const res = snap.map(emp => calculateEmployeeSalary(emp, salarySettings));
+          const sum = calculateTotalSalarySummary(res);
+          total = sum.totalGross;
+        } catch (e) {
+          console.warn(`Failed calculating salary snapshot for ${m}:`, e);
+        }
       }
 
       totals[m] = { total, isRegistered, count: txs.length };
     });
     return totals;
-  }, [currentPeriod.months, transactions, settings.monthlySalarySnapshots, salarySettings]);
+  }, [currentPeriod, transactions, settings?.monthlySalarySnapshots, salarySettings]);
 
   // Save employees wrapper that persists to both activeMonth snapshot and global settings
   const saveEmployees = (updated: SalaryEmployee[]) => {
@@ -240,14 +266,14 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   const [showMinimapBreakdown, setShowMinimapBreakdown] = useState<boolean>(true);
 
   // Closed stores list
-  const closedStores = settings.closedStores || [];
+  const closedStores = settings?.closedStores || [];
   const openStores = useMemo(() => {
-    return (settings.stores || []).filter(s => !closedStores.includes(s));
-  }, [settings.stores, closedStores]);
+    return (settings?.stores || []).filter(s => !closedStores.includes(s));
+  }, [settings?.stores, closedStores]);
 
   // Calculate salary for each employee
   const calculationResults = useMemo(() => {
-    return employees.map(emp => calculateEmployeeSalary(emp, salarySettings));
+    return (employees || []).map(emp => calculateEmployeeSalary(emp, salarySettings));
   }, [employees, salarySettings]);
 
   // Total Summary
@@ -257,8 +283,9 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   // Filtered results by store
   const filteredResults = useMemo(() => {
+    if (!Array.isArray(calculationResults)) return [];
     if (storeFilter === 'ALL') return calculationResults;
-    return calculationResults.filter(r => r.employee.store === storeFilter);
+    return calculationResults.filter(r => r?.employee?.store === storeFilter);
   }, [calculationResults, storeFilter]);
 
   // Check if current month already has salary or statutory welfare registered
@@ -602,11 +629,11 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
           <div className="flex items-center gap-1.5 bg-gray-50 p-1 rounded-xl border border-gray-200">
             <Calendar className="w-3.5 h-3.5 text-gray-500 ml-1.5" />
             <select
-              value={selectedFilter.startsWith('period-') ? selectedFilter : currentPeriod?.key || 'period-1'}
+              value={selectedFilter && typeof selectedFilter === 'string' && selectedFilter.startsWith('period-') ? selectedFilter : currentPeriod?.key || 'period-1'}
               onChange={(e) => handlePeriodSelect(e.target.value)}
               className="text-xs font-bold bg-transparent text-gray-800 focus:outline-hidden pr-2 py-1 cursor-pointer"
             >
-              {fiscalPeriods.map(p => (
+              {(fiscalPeriods || []).map(p => (
                 <option key={p.key} value={p.key}>
                   {p.label}
                 </option>
@@ -669,7 +696,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
         <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-gray-700 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-emerald-600" />
-            {currentPeriod.label} 月別進捗ミニマップ (対象月を選択):
+            {currentPeriod?.label || '第1期'} 月別進捗ミニマップ (対象月を選択):
           </span>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-gray-500 font-medium hidden sm:inline">
@@ -687,8 +714,9 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
         {/* 12 Month Pills Grid */}
         <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
-          {currentPeriod.months.map(m => {
-            const [, monthNum] = m.split('-');
+          {(currentPeriod?.months || []).map(m => {
+            const parts = m.split('-');
+            const monthNum = parts[1] || '1';
             const monthData = salaryMonthTotals[m] || { total: 0, isRegistered: false, count: 0 };
             const isSelected = activeMonth === m;
             const hasRegisteredTx = monthData.isRegistered;
@@ -898,10 +926,10 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
             onChange={(e) => setStoreFilter(e.target.value)}
             className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 focus:outline-hidden"
           >
-            <option value="ALL">すべての店舗・全社 ({employees.length}名)</option>
-            {settings.stores.map(store => (
+            <option value="ALL">すべての店舗・全社 ({(employees || []).length}名)</option>
+            {(settings?.stores || []).map(store => (
               <option key={store} value={store}>
-                {store} ({employees.filter(e => e.store === store).length}名)
+                {store} ({(employees || []).filter(e => e.store === store).length}名)
               </option>
             ))}
           </select>
@@ -1585,10 +1613,10 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                   onChange={(e) => setCopySourceMonth(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                 >
-                  {fiscalPeriods.map(period => (
+                  {(fiscalPeriods || []).map(period => (
                     <optgroup key={`copy-${period.key}`} label={period.label}>
-                      {period.months.slice().sort().reverse().map(m => {
-                        const hasSnap = Boolean(settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[m]);
+                      {(period?.months || []).slice().sort().reverse().map(m => {
+                        const hasSnap = Boolean(settings?.monthlySalarySnapshots && settings.monthlySalarySnapshots[m]);
                         const isCurrent = m === activeMonth;
                         return (
                           <option key={`opt-${m}`} value={m} disabled={isCurrent}>

@@ -43,6 +43,7 @@ import { MonthlyAggregationView } from './components/MonthlyAggregationView';
 import { StoreSalesCardBoard } from './components/StoreSalesCardBoard';
 import { ExpenseCardsView } from './components/ExpenseCardsView';
 import { SalaryView } from './components/SalaryView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { SalaryTotalSummary, SalaryCalculationResult, calculateEmployeeSalary, calculateTotalSalarySummary } from './utils/salaryCalculator';
 import { FinancialStatementView } from './components/FinancialStatementView';
 import { AddSalesModal } from './components/AddSalesModal';
@@ -126,7 +127,7 @@ export default function App() {
 
   // Keep selected filter valid if periods update
   useEffect(() => {
-    if (selectedFilter.startsWith('period-')) {
+    if (selectedFilter && typeof selectedFilter === 'string' && selectedFilter.startsWith('period-')) {
       const exists = fiscalPeriods.some(p => p.key === selectedFilter);
       if (!exists && fiscalPeriods.length > 0) {
         setSelectedFilter(fiscalPeriods[0].key);
@@ -1249,19 +1250,21 @@ export default function App() {
         )}
 
         {currentTab === 'salary' && (
-          <SalaryView
-            settings={settings}
-            transactions={transactions}
-            fiscalPeriods={fiscalPeriods}
-            selectedFilter={selectedFilter}
-            onSelectFilter={setSelectedFilter}
-            onSaveSalaryEmployees={handleSaveSalaryEmployees}
-            onSaveSalarySettings={handleSaveSalarySettings}
-            onRegisterSalaryToTransactions={handleRegisterSalaryToTransactions}
-            onSyncToMonthEndExpenseCard={handleSyncSalaryToExpenseCards}
-            onEditTransaction={setEditingTransaction}
-            onDeleteTransaction={handleDeleteTransaction}
-          />
+          <ErrorBoundary fallbackTitle="給与・報酬ページの表示エラー">
+            <SalaryView
+              settings={settings}
+              transactions={transactions}
+              fiscalPeriods={fiscalPeriods}
+              selectedFilter={selectedFilter}
+              onSelectFilter={setSelectedFilter}
+              onSaveSalaryEmployees={handleSaveSalaryEmployees}
+              onSaveSalarySettings={handleSaveSalarySettings}
+              onRegisterSalaryToTransactions={handleRegisterSalaryToTransactions}
+              onSyncToMonthEndExpenseCard={handleSyncSalaryToExpenseCards}
+              onEditTransaction={setEditingTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
+            />
+          </ErrorBoundary>
         )}
 
         {currentTab === 'list' && (

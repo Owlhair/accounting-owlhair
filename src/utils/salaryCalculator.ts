@@ -139,14 +139,37 @@ export function calculateEmployeeSalary(
   employee: SalaryEmployee,
   settings: SalarySettings = DEFAULT_SALARY_SETTINGS
 ): SalaryCalculationResult {
-  const totalBase = employee.baseSalary || 0;
-  const totalAllowances = (employee.allowances || []).reduce((acc, cur) => acc + (cur.amount || 0), 0);
+  const safeEmp: SalaryEmployee = employee
+    ? { ...employee }
+    : {
+        id: 'unknown',
+        name: 'スタッフ',
+        type: 'salary',
+        store: '全社共通',
+        baseSalary: 0,
+        allowances: [],
+        hasSocialInsurance: false,
+        hasEmploymentInsurance: false,
+        dependentsCount: 0,
+        residentTax: 0,
+        isActive: true,
+      };
+  const totalBase = safeEmp.baseSalary || 0;
+
+  // allowancesが配列でない場合（数値やnullなど）も安全に配列化してフォールバック
+  const allowancesList = Array.isArray(safeEmp.allowances)
+    ? safeEmp.allowances
+    : typeof (safeEmp as any).allowances === 'number'
+    ? [{ id: 'alw-legacy', title: '手当', amount: (safeEmp as any).allowances, isTaxable: true }]
+    : [];
+
+  const totalAllowances = allowancesList.reduce((acc, cur) => acc + (cur?.amount || 0), 0);
   const grossSalary = totalBase + totalAllowances;
 
   // 非課税手当の合計（通勤手当等）
-  const nonTaxableAllowances = (employee.allowances || [])
-    .filter((a) => a.isTaxable === false)
-    .reduce((acc, cur) => acc + (cur.amount || 0), 0);
+  const nonTaxableAllowances = allowancesList
+    .filter((a) => a?.isTaxable === false)
+    .reduce((acc, cur) => acc + (cur?.amount || 0), 0);
 
   // 1. 社会保険（健康保険・厚生年金・介護保険）
   let healthInsurance = 0;
@@ -157,33 +180,33 @@ export function calculateEmployeeSalary(
   let companyWelfarePension = 0;
   let companyChildContribution = 0;
 
-  if (employee.hasSocialInsurance) {
+  if (safeEmp.hasSocialInsurance) {
     const stdRemuneration = getStandardMonthlyRemuneration(grossSalary);
 
     // 本人分
-    if (employee.customOverrides?.healthInsurance !== undefined) {
-      healthInsurance = employee.customOverrides.healthInsurance;
+    if (safeEmp.customOverrides?.healthInsurance !== undefined) {
+      healthInsurance = safeEmp.customOverrides.healthInsurance;
     } else {
-      healthInsurance = Math.floor(stdRemuneration * settings.healthInsuranceRate);
+      healthInsurance = Math.floor(stdRemuneration * (settings?.healthInsuranceRate ?? 0.05));
     }
 
-    if (employee.hasCareInsurance) {
-      careInsurance = Math.floor(stdRemuneration * settings.careInsuranceRate);
+    if (safeEmp.hasCareInsurance) {
+      careInsurance = Math.floor(stdRemuneration * (settings?.careInsuranceRate ?? 0.008));
     }
 
-    if (employee.customOverrides?.welfarePension !== undefined) {
-      welfarePension = employee.customOverrides.welfarePension;
+    if (safeEmp.customOverrides?.welfarePension !== undefined) {
+      welfarePension = safeEmp.customOverrides.welfarePension;
     } else {
       // 厚生年金の上限（32等級 650,000円）
       const pensionStd = Math.min(stdRemuneration, 650000);
-      welfarePension = Math.floor(pensionStd * settings.pensionRate);
+      welfarePension = Math.floor(pensionStd * (settings?.pensionRate ?? 0.0915));
     }
 
     // 会社負担分 (労使折半 + 子ども子育て拠出金)
     companyHealthInsurance = healthInsurance;
     companyCareInsurance = careInsurance;
     companyWelfarePension = welfarePension;
-    companyChildContribution = Math.floor(stdRemuneration * settings.childContributionRate);
+    companyChildContribution = Math.floor(stdRemuneration * (settings?.childContributionRate ?? 0.0036));
   }
 
   const socialInsuranceTotal = healthInsurance + careInsurance + welfarePension;
@@ -197,13 +220,13 @@ export function calculateEmployeeSalary(
   let employmentInsurance = 0;
   let companyEmploymentInsurance = 0;
 
-  if (employee.hasEmploymentInsurance) {
-    if (employee.customOverrides?.employmentInsurance !== undefined) {
-      employmentInsurance = employee.customOverrides.employmentInsurance;
+  if (safeEmp.hasEmploymentInsurance) {
+    if (safeEmp.customOverrides?.employmentInsurance !== undefined) {
+      employmentInsurance = safeEmp.customOverrides.employmentInsurance;
     } else {
-      employmentInsurance = Math.floor(grossSalary * settings.empInsuranceEmployeeRate);
+      employmentInsurance = Math.floor(grossSalary * (settings?.empInsuranceEmployeeRate ?? 0.006));
     }
-    companyEmploymentInsurance = Math.floor(grossSalary * settings.empInsuranceCompanyRate);
+    companyEmploymentInsurance = Math.floor(grossSalary * (settings?.empInsuranceCompanyRate ?? 0.0095));
   }
 
   // 3. 所得税（源泉徴収税額）
@@ -214,14 +237,14 @@ export function calculateEmployeeSalary(
   );
 
   let incomeTax = 0;
-  if (employee.customOverrides?.incomeTax !== undefined) {
-    incomeTax = employee.customOverrides.incomeTax;
+  if (safeEmp.customOverrides?.incomeTax !== undefined) {
+    incomeTax = safeEmp.customOverrides.incomeTax;
   } else {
-    incomeTax = estimateWithholdingTax(taxableAmount, employee.dependentsCount || 0);
+    incomeTax = estimateWithholdingTax(taxableAmount, safeEmp.dependentsCount || 0);
   }
 
   // 4. 住民税
-  const residentTax = employee.residentTax || 0;
+  const residentTax = safeEmp.residentTax || 0;
 
   // 控除合計
   const totalDeductions = socialInsuranceTotal + employmentInsurance + incomeTax + residentTax;
@@ -243,7 +266,7 @@ export function calculateEmployeeSalary(
     residentTax;
 
   return {
-    employee,
+    employee: safeEmp,
     totalBase,
     totalAllowances,
     grossSalary,
@@ -315,9 +338,10 @@ export interface SalaryTotalSummary {
 }
 
 export function calculateTotalSalarySummary(
-  results: SalaryCalculationResult[]
+  results: SalaryCalculationResult[] = []
 ): SalaryTotalSummary {
-  const activeResults = results.filter((r) => r.employee.isActive);
+  const safeResults = Array.isArray(results) ? results.filter(Boolean) : [];
+  const activeResults = safeResults.filter((r) => r?.employee ? r.employee.isActive !== false : false);
 
   let totalGross = 0;
   let totalExecutiveRemuneration = 0;

@@ -48,8 +48,8 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
   onEditTransaction,
   onDeleteTransaction,
 }) => {
-  const [year, monthNum] = activeMonth.split('-');
-  const monthInt = parseInt(monthNum, 10);
+  const [year, monthNum] = (activeMonth || '2025-08').split('-');
+  const monthInt = parseInt(monthNum || '8', 10);
 
   // Local state for inline delete confirmation & bulk cleanup
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -106,7 +106,7 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
     .filter((t) => t.category === '役員報酬' || t.category === '給料手当')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-  const displayTotal = isRegistered && registeredSalaryTotal > 0 ? registeredSalaryTotal : summary.totalGross;
+  const displayTotal = isRegistered && registeredSalaryTotal > 0 ? registeredSalaryTotal : (summary?.totalGross ?? 0);
 
   return (
     <div className="bg-slate-50/90 border border-slate-200/90 rounded-2xl overflow-hidden transition-all shadow-2xs">
@@ -164,25 +164,25 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
             <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 shadow-2xs">
               <span className="text-[10px] text-slate-500 block">役員報酬 計</span>
               <span className="font-mono font-bold text-slate-900 text-xs">
-                ¥{summary.totalExecutive.toLocaleString()}
+                ¥{(summary?.totalExecutiveRemuneration ?? 0).toLocaleString()}
               </span>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 shadow-2xs">
               <span className="text-[10px] text-slate-500 block">スタッフ給料 計</span>
               <span className="font-mono font-bold text-slate-900 text-xs">
-                ¥{summary.totalSalary.toLocaleString()}
+                ¥{(summary?.totalStaffSalary ?? 0).toLocaleString()}
               </span>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 shadow-2xs">
               <span className="text-[10px] text-slate-500 block">手取り振込 計</span>
               <span className="font-mono font-bold text-emerald-900 text-xs">
-                ¥{summary.totalNet.toLocaleString()}
+                ¥{(summary?.totalNetSalary ?? 0).toLocaleString()}
               </span>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 shadow-2xs">
               <span className="text-[10px] text-slate-500 block">会社総負担（社保込）</span>
               <span className="font-mono font-bold text-indigo-900 text-xs">
-                ¥{summary.totalCompanyCost.toLocaleString()}
+                ¥{(summary?.totalCompanyCost ?? 0).toLocaleString()}
               </span>
             </div>
           </div>
@@ -241,7 +241,7 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
                         <span>基本給 + 手当:</span>
                         <span className="font-mono">
                           ¥{(emp.baseSalary || 0).toLocaleString()}
-                          {(emp.allowances || 0) > 0 ? ` + ¥${emp.allowances.toLocaleString()}` : ''}
+                          {(res.totalAllowances || 0) > 0 ? ` + ¥${res.totalAllowances.toLocaleString()}` : ''}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-slate-600">
