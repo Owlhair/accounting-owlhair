@@ -50,6 +50,7 @@ import {
   SalaryTotalSummary 
 } from '../utils/salaryCalculator';
 import { SalaryMinimapBreakdown } from './SalaryMinimapBreakdown';
+import { EmployeeEditModal } from './EmployeeEditModal';
 
 // Format YYYY-MM to Japanese display (例: "2025年8月")
 const formatMonthLabel = (m: string) => {
@@ -357,11 +358,19 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
     saveEmployees(updated);
   };
 
+  // Helper: save edited employee from modal
+  const handleSaveEditedEmployee = (updatedEmp: SalaryEmployee) => {
+    const updated = employees.map(emp => emp.id === updatedEmp.id ? updatedEmp : emp);
+    saveEmployees(updated);
+    setEditingEmployee(null);
+  };
+
   // Helper: update base salary
   const handleUpdateBaseSalary = (empId: string, val: number) => {
+    const safeVal = Math.max(0, isNaN(val) ? 0 : val);
     const updated = employees.map(emp => {
       if (emp.id === empId) {
-        return { ...emp, baseSalary: Math.max(0, val) };
+        return { ...emp, baseSalary: safeVal };
       }
       return emp;
     });
@@ -370,9 +379,10 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
 
   // Helper: update resident tax
   const handleUpdateResidentTax = (empId: string, val: number) => {
+    const safeVal = Math.max(0, isNaN(val) ? 0 : val);
     const updated = employees.map(emp => {
       if (emp.id === empId) {
-        return { ...emp, residentTax: Math.max(0, val) };
+        return { ...emp, residentTax: safeVal };
       }
       return emp;
     });
@@ -415,7 +425,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       if (emp.id === empId) {
         const newAlw: SalaryAllowance = {
           id: `alw-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`,
-          title: '手当',
+          title: '役職手当',
           amount: 10000,
           isTaxable: true,
         };
@@ -432,7 +442,8 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
       if (emp.id === empId) {
         const alws = (emp.allowances || []).map(a => {
           if (a.id === alwId) {
-            return { ...a, [field]: value };
+            const finalVal = field === 'amount' ? Math.max(0, isNaN(Number(value)) ? 0 : Number(value)) : value;
+            return { ...a, [field]: finalVal };
           }
           return a;
         });
@@ -1074,6 +1085,14 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
+                      onClick={() => setEditingEmployee(emp)}
+                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                      title="給与・役員報酬の詳細設定を編集"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleDuplicateEmployee(emp)}
                       className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
                       title="このメンバーを複製"
@@ -1121,8 +1140,9 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                           <input
                             type="number"
                             step="1000"
-                            value={emp.baseSalary || 0}
-                            onChange={(e) => handleUpdateBaseSalary(emp.id, Number(e.target.value))}
+                            min="0"
+                            value={emp.baseSalary ?? 0}
+                            onChange={(e) => handleUpdateBaseSalary(emp.id, e.target.value === '' ? 0 : Number(e.target.value))}
                             className="w-28 text-right text-xs font-bold font-mono bg-white border border-gray-200 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
                           />
                         </div>
@@ -1154,8 +1174,9 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                             <input
                               type="number"
                               step="500"
-                              value={alw.amount || 0}
-                              onChange={(e) => handleUpdateAllowance(emp.id, alw.id, 'amount', Number(e.target.value))}
+                              min="0"
+                              value={alw.amount ?? 0}
+                              onChange={(e) => handleUpdateAllowance(emp.id, alw.id, 'amount', e.target.value === '' ? 0 : Number(e.target.value))}
                               className="w-24 text-right text-xs font-bold font-mono bg-white border border-gray-200 rounded-md px-2 py-1 focus:outline-hidden"
                             />
                             <button
@@ -1380,9 +1401,18 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
             <tbody className="divide-y divide-gray-100">
               {filteredResults.map(r => (
                 <tr key={r.employee.id} className="hover:bg-gray-50/80 transition-colors">
-                  <td className="p-3">
-                    <span className="font-bold text-gray-900 block">{r.employee.name}</span>
-                    <span className="text-[10px] text-gray-400">{r.employee.store}</span>
+                  <td 
+                    className="p-3 cursor-pointer group"
+                    onClick={() => setEditingEmployee(r.employee)}
+                    title="クリックして給与・役員報酬設定を編集"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                        {r.employee.name}
+                      </span>
+                      <Edit3 className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="text-[10px] text-gray-400 block">{r.employee.store}</span>
                   </td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -1391,7 +1421,20 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                       {r.employee.type === 'executive' ? '役員報酬' : '給与'}
                     </span>
                   </td>
-                  <td className="p-3 text-right font-mono font-bold">¥{r.totalBase.toLocaleString()}</td>
+                  <td className="p-3 text-right">
+                    <div className="flex items-center justify-end gap-0.5">
+                      <span className="text-gray-400 text-[10px]">¥</span>
+                      <input
+                        type="number"
+                        step="1000"
+                        min="0"
+                        value={r.employee.baseSalary ?? 0}
+                        onChange={(e) => handleUpdateBaseSalary(r.employee.id, e.target.value === '' ? 0 : Number(e.target.value))}
+                        className="w-24 text-right font-mono font-bold text-xs bg-slate-50 hover:bg-white focus:bg-white border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded px-1.5 py-1 focus:outline-hidden transition-colors"
+                        title="基本給・報酬額を直接編集"
+                      />
+                    </div>
+                  </td>
                   <td className="p-3 text-right font-mono">¥{r.totalAllowances.toLocaleString()}</td>
                   <td className="p-3 text-right font-mono font-bold text-gray-900">¥{r.grossSalary.toLocaleString()}</td>
                   <td className="p-3 text-center">
@@ -1444,6 +1487,14 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
                   </td>
                   <td className="p-3 text-center">
                     <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingEmployee(r.employee)}
+                        title="給与・役員報酬の詳細設定を編集"
+                        className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleDuplicateEmployee(r.employee)}
@@ -1720,6 +1771,16 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Employee Detail & Salary Edit Modal */}
+      <EmployeeEditModal
+        isOpen={!!editingEmployee}
+        employee={editingEmployee}
+        salarySettings={salarySettings}
+        stores={openStores}
+        onClose={() => setEditingEmployee(null)}
+        onSave={handleSaveEditedEmployee}
+      />
     </div>
   );
 };

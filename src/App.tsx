@@ -520,6 +520,214 @@ export default function App() {
     );
   };
 
+  // Helper: Synchronize salary and month-end figures to expenseCards within an AppSettings object
+  const applySalaryCardsSync = (
+    baseSettings: AppSettings,
+    summary: SalaryTotalSummary,
+    targetMonth: string
+  ): AppSettings => {
+    const currentCards = [...(baseSettings.expenseCards || [])];
+
+    // 1. 【3. 給与グループ（timingGroup: 'salary'）のカード】
+    let salaryCard = currentCards.find(c => c.timingGroup === 'salary');
+    if (!salaryCard) {
+      salaryCard = {
+        id: `ec-salary-board`,
+        title: '役員報酬・スタッフ給与（支給日振込）',
+        timingGroup: 'salary',
+        paymentMethod: '銀行振込',
+        store: '全社共通',
+        memo: `毎月${baseSettings.salarySettings?.payDay || 25}日振込 給与・役員報酬`,
+        subItems: [],
+      };
+      currentCards.push(salaryCard);
+    }
+
+    const salarySubItems = [...(salaryCard.subItems || [])];
+
+    // 1-1. 役員報酬サブアイテム
+    if (summary.totalExecutiveRemuneration > 0) {
+      const execIdx = salarySubItems.findIndex(i => i.name.includes('役員報酬') || i.category === '役員報酬');
+      if (execIdx >= 0) {
+        salarySubItems[execIdx] = {
+          ...salarySubItems[execIdx],
+          defaultAmount: summary.totalExecutiveRemuneration,
+          memo: `役員${summary.executiveCount}名分 (${targetMonth}給与台帳)`,
+        };
+      } else {
+        salarySubItems.push({
+          id: `sub-sal-exec-${Date.now()}`,
+          name: '役員報酬（定期同額給与）',
+          category: '役員報酬',
+          costType: 'fixed',
+          defaultAmount: summary.totalExecutiveRemuneration,
+          store: '全社共通',
+          memo: `役員${summary.executiveCount}名分 (${targetMonth}給与台帳)`,
+        });
+      }
+    }
+
+    // 1-2. スタッフ給料手当サブアイテム
+    if (summary.totalStaffSalary > 0) {
+      const staffIdx = salarySubItems.findIndex(i => i.name.includes('給料') || i.name.includes('スタッフ') || i.category === '給料手当');
+      if (staffIdx >= 0) {
+        salarySubItems[staffIdx] = {
+          ...salarySubItems[staffIdx],
+          defaultAmount: summary.totalStaffSalary,
+          memo: `スタッフ${summary.staffCount}名分 (手当計 ¥${summary.totalAllowances.toLocaleString()}含む)`,
+        };
+      } else {
+        salarySubItems.push({
+          id: `sub-sal-staff-${Date.now()}`,
+          name: 'スタッフ給料手当',
+          category: '給料手当',
+          costType: 'fixed',
+          defaultAmount: summary.totalStaffSalary,
+          store: '全社共通',
+          memo: `スタッフ${summary.staffCount}名分 (手当計 ¥${summary.totalAllowances.toLocaleString()}含む)`,
+        });
+      }
+    }
+
+    // Ensure salary card always has both sub-items even if amounts are zero
+    if (salarySubItems.length === 0) {
+      salarySubItems.push(
+        {
+          id: `sub-sal-exec-def`,
+          name: `役員報酬（定期同額給与・${summary.executiveCount || 1}名）`,
+          category: '役員報酬',
+          costType: 'fixed',
+          defaultAmount: summary.totalExecutiveRemuneration || 0,
+          store: '全社共通',
+          memo: `役員報酬`,
+        },
+        {
+          id: `sub-sal-staff-def`,
+          name: `スタッフ給料手当（${summary.staffCount || 1}名）`,
+          category: '給料手当',
+          costType: 'fixed',
+          defaultAmount: summary.totalStaffSalary || 0,
+          store: '全社共通',
+          memo: `スタッフ給与`,
+        }
+      );
+    }
+
+    salaryCard = {
+      ...salaryCard,
+      subItems: salarySubItems,
+      defaultAmount: summary.totalGross,
+    };
+
+    // 2. 【2. 末にまとめて払うものグループ（timingGroup: 'month_end'）のカード】
+    let monthEndCard = currentCards.find(c => c.timingGroup === 'month_end');
+    const socialInsTotal = summary.monthEndSummary.socialInsurancePayment;
+    const laborInsTotal = summary.monthEndSummary.laborInsurancePayment;
+    const taxesTotal = summary.monthEndSummary.withholdingTaxPayment + summary.monthEndSummary.residentTaxPayment;
+
+    if (!monthEndCard) {
+      monthEndCard = {
+        id: `ec-month-end-${Date.now()}`,
+        title: '月末まとめて支払うもの（請求書・社保・税金）',
+        timingGroup: 'month_end',
+        paymentMethod: '口座振替',
+        store: '全社共通',
+        memo: '社会保険料・税金・買掛金など',
+        subItems: [],
+      };
+      currentCards.push(monthEndCard);
+    }
+
+    const existingSubItems = [...(monthEndCard.subItems || [])];
+
+    // 2-1. 社会保険料（会社負担＋本人分合算）
+    if (socialInsTotal > 0) {
+      const socIdx = existingSubItems.findIndex(i => i.name.includes('社会保険料'));
+      if (socIdx >= 0) {
+        existingSubItems[socIdx] = {
+          ...existingSubItems[socIdx],
+          defaultAmount: socialInsTotal,
+          memo: `社保本人+会社負担分合算 (${targetMonth}給与台帳)`,
+        };
+      } else {
+        existingSubItems.push({
+          id: `sub-soc-${Date.now()}`,
+          name: '社会保険料納付（会社負担＋本人分合算）',
+          category: '法定福利費',
+          costType: 'fixed',
+          defaultAmount: socialInsTotal,
+          store: '全社共通',
+          memo: `健保・厚年・介護・子ども子育て (本人+会社負担合算)`,
+        });
+      }
+    }
+
+    // 2-2. 労働保険
+    if (laborInsTotal > 0) {
+      const laborIdx = existingSubItems.findIndex(i => i.name.includes('雇用保険') || i.name.includes('労働保険'));
+      if (laborIdx >= 0) {
+        existingSubItems[laborIdx] = {
+          ...existingSubItems[laborIdx],
+          defaultAmount: laborInsTotal,
+          memo: `雇用保険 会社負担分 (${targetMonth}給与台帳)`,
+        };
+      } else {
+        existingSubItems.push({
+          id: `sub-labor-${Date.now()}`,
+          name: '雇用保険・労働保険（会社負担分）',
+          category: '法定福利費',
+          costType: 'fixed',
+          defaultAmount: laborInsTotal,
+          store: '全社共通',
+          memo: '事業主会社負担分',
+        });
+      }
+    }
+
+    // 2-3. 源泉税・住民税
+    if (taxesTotal > 0) {
+      const taxIdx = existingSubItems.findIndex(i => i.name.includes('源泉') || i.name.includes('税金納付'));
+      if (taxIdx >= 0) {
+        existingSubItems[taxIdx] = {
+          ...existingSubItems[taxIdx],
+          defaultAmount: taxesTotal,
+          memo: `源泉所得税+住民税 天引き預り金納付 (${targetMonth}給与台帳)`,
+        };
+      } else {
+        existingSubItems.push({
+          id: `sub-tax-${Date.now()}`,
+          name: '源泉所得税・住民税（預り金納付）',
+          category: '租税公課',
+          costType: 'fixed',
+          defaultAmount: taxesTotal,
+          store: '全社共通',
+          memo: '給与天引き分の月末納付',
+        });
+      }
+    }
+
+    monthEndCard = {
+      ...monthEndCard,
+      subItems: existingSubItems,
+      defaultAmount: summary.monthEndSummary.totalMonthEndPayment,
+    };
+
+    const hasSalary = currentCards.some(c => c.id === salaryCard!.id);
+    let updatedCards = currentCards.map(c => {
+      if (c.id === salaryCard!.id) return salaryCard!;
+      if (c.id === monthEndCard!.id) return monthEndCard!;
+      return c;
+    });
+    if (!hasSalary) {
+      updatedCards = [salaryCard!, ...updatedCards];
+    }
+
+    return {
+      ...baseSettings,
+      expenseCards: updatedCards,
+    };
+  };
+
   // Handler: Save Salary Employees (persists to monthly snapshot & updates card defaults without overwriting ledger)
   const handleSaveSalaryEmployees = (newEmployees: SalaryEmployee[], targetMonth?: string) => {
     const curMonth = targetMonth || (selectedFilter.includes('-') && selectedFilter.length === 7 ? selectedFilter : new Date().toISOString().substring(0, 7));
@@ -539,36 +747,38 @@ export default function App() {
     const results = newEmployees.map(e => calculateEmployeeSalary(e, salarySettings));
     const summary = calculateTotalSalarySummary(results);
 
-    const updated: AppSettings = {
+    let updated: AppSettings = {
       ...settings,
       salaryEmployees: newEmployees,
       monthlySalarySnapshots: snapshots,
     };
+    // Sync expense cards default figures atomically inside updated object so nothing gets overwritten
+    updated = applySalaryCardsSync(updated, summary, curMonth);
+
     setSettings(updated);
     saveSettings(updated);
     syncSaveSettingsToFirestore(updated);
-
-    // Sync expense cards default figures quietly (do NOT silently rewrite ledger transactions!)
-    handleSyncSalaryToExpenseCards(summary, curMonth, true);
   };
 
   // Handler: Save Salary Settings (updates card defaults without overwriting ledger)
   const handleSaveSalarySettings = (newSalarySettings: SalarySettings) => {
-    const updated: AppSettings = {
+    const curMonth = selectedFilter.includes('-') && selectedFilter.length === 7 ? selectedFilter : new Date().toISOString().substring(0, 7);
+    const emps = (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[curMonth]) || settings.salaryEmployees || [];
+
+    let updated: AppSettings = {
       ...settings,
       salarySettings: newSalarySettings,
     };
-    setSettings(updated);
-    saveSettings(updated);
-    syncSaveSettingsToFirestore(updated);
 
-    const curMonth = selectedFilter.includes('-') && selectedFilter.length === 7 ? selectedFilter : new Date().toISOString().substring(0, 7);
-    const emps = (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[curMonth]) || settings.salaryEmployees || [];
     if (emps.length > 0) {
       const results = emps.map(e => calculateEmployeeSalary(e, newSalarySettings));
       const summary = calculateTotalSalarySummary(results);
-      handleSyncSalaryToExpenseCards(summary, curMonth, true);
+      updated = applySalaryCardsSync(updated, summary, curMonth);
     }
+
+    setSettings(updated);
+    saveSettings(updated);
+    syncSaveSettingsToFirestore(updated);
   };
 
   // Handler: Register Salary and Month-End Payments to Transactions
@@ -622,11 +832,12 @@ export default function App() {
     if (!updatedCategories.includes('法定福利費')) {
       updatedCategories = [...updatedCategories, '法定福利費'];
     }
-    const updatedSettings = { 
+    let updatedSettings: AppSettings = { 
       ...settings, 
       expenseCategories: updatedCategories,
       monthlySalarySnapshots: snapshots,
     };
+    updatedSettings = applySalaryCardsSync(updatedSettings, summary, targetMonth);
     setSettings(updatedSettings);
     saveSettings(updatedSettings);
     syncSaveSettingsToFirestore(updatedSettings);
@@ -778,8 +989,7 @@ export default function App() {
 
     newTxList.forEach(tx => syncSaveTransactionToFirestore(tx));
 
-    // Automatically sync salary & month-end cards to expense cards as well!
-    handleSyncSalaryToExpenseCards(summary, targetMonth, true);
+    // (Note: Salary & month-end cards were already synchronized atomically above)
 
     if (!silent) {
       const totalCost = summary.totalCompanyCost;
@@ -799,206 +1009,14 @@ export default function App() {
 
   // Handler: Sync Salary & Month-End Cards to Expense Cards (給与報酬出来上がりカードを経費カードへ反映)
   const handleSyncSalaryToExpenseCards = (summary: SalaryTotalSummary, targetMonth: string, silent = false) => {
-    const currentCards = [...(settings.expenseCards || [])];
-
-    // 1. 【3. 給与グループ（timingGroup: 'salary'）のカード】
-    let salaryCard = currentCards.find(c => c.timingGroup === 'salary');
-    if (!salaryCard) {
-      salaryCard = {
-        id: `ec-salary-board`,
-        title: '役員報酬・スタッフ給与（支給日振込）',
-        timingGroup: 'salary',
-        paymentMethod: '銀行振込',
-        store: '全社共通',
-        memo: `毎月${settings.salarySettings?.payDay || 25}日振込 給与・役員報酬`,
-        subItems: [],
-      };
-      currentCards.push(salaryCard);
-    }
-
-    const salarySubItems = [...(salaryCard.subItems || [])];
-
-    // 1-1. 役員報酬サブアイテム
-    if (summary.totalExecutiveRemuneration > 0) {
-      const execIdx = salarySubItems.findIndex(i => i.name.includes('役員報酬') || i.category === '役員報酬');
-      if (execIdx >= 0) {
-        salarySubItems[execIdx] = {
-          ...salarySubItems[execIdx],
-          defaultAmount: summary.totalExecutiveRemuneration,
-          memo: `役員${summary.executiveCount}名分 (${targetMonth}給与台帳)`,
-        };
-      } else {
-        salarySubItems.push({
-          id: `sub-sal-exec-${Date.now()}`,
-          name: '役員報酬（定期同額給与）',
-          category: '役員報酬',
-          costType: 'fixed',
-          defaultAmount: summary.totalExecutiveRemuneration,
-          store: '全社共通',
-          memo: `役員${summary.executiveCount}名分 (${targetMonth}給与台帳)`,
-        });
-      }
-    }
-
-    // 1-2. スタッフ給料手当サブアイテム
-    if (summary.totalStaffSalary > 0) {
-      const staffIdx = salarySubItems.findIndex(i => i.name.includes('給料') || i.name.includes('スタッフ') || i.category === '給料手当');
-      if (staffIdx >= 0) {
-        salarySubItems[staffIdx] = {
-          ...salarySubItems[staffIdx],
-          defaultAmount: summary.totalStaffSalary,
-          memo: `スタッフ${summary.staffCount}名分 (手当計 ¥${summary.totalAllowances.toLocaleString()}含む)`,
-        };
-      } else {
-        salarySubItems.push({
-          id: `sub-sal-staff-${Date.now()}`,
-          name: 'スタッフ給料手当',
-          category: '給料手当',
-          costType: 'fixed',
-          defaultAmount: summary.totalStaffSalary,
-          store: '全社共通',
-          memo: `スタッフ${summary.staffCount}名分 (手当計 ¥${summary.totalAllowances.toLocaleString()}含む)`,
-        });
-      }
-    }
-
-    // Ensure salary card always has both sub-items even if amounts are zero
-    if (salarySubItems.length === 0) {
-      salarySubItems.push(
-        {
-          id: `sub-sal-exec-def`,
-          name: `役員報酬（定期同額給与・${summary.executiveCount || 1}名）`,
-          category: '役員報酬',
-          costType: 'fixed',
-          defaultAmount: summary.totalExecutiveRemuneration || 0,
-          store: '全社共通',
-          memo: `役員報酬`,
-        },
-        {
-          id: `sub-sal-staff-def`,
-          name: `スタッフ給料手当（${summary.staffCount || 1}名）`,
-          category: '給料手当',
-          costType: 'fixed',
-          defaultAmount: summary.totalStaffSalary || 0,
-          store: '全社共通',
-          memo: `スタッフ給与`,
-        }
-      );
-    }
-
-    salaryCard.subItems = salarySubItems;
-    salaryCard.defaultAmount = summary.totalGross;
-
-    // 2. 【2. 末にまとめて払うものグループ（timingGroup: 'month_end'）のカード】
-    let monthEndCard = currentCards.find(c => c.timingGroup === 'month_end');
-    const socialInsTotal = summary.monthEndSummary.socialInsurancePayment;
-    const laborInsTotal = summary.monthEndSummary.laborInsurancePayment;
-    const taxesTotal = summary.monthEndSummary.withholdingTaxPayment + summary.monthEndSummary.residentTaxPayment;
-
-    if (!monthEndCard) {
-      monthEndCard = {
-        id: `ec-month-end-${Date.now()}`,
-        title: '月末まとめて支払うもの（請求書・社保・税金）',
-        timingGroup: 'month_end',
-        paymentMethod: '口座振替',
-        store: '全社共通',
-        memo: '社会保険料・税金・買掛金など',
-        subItems: [],
-      };
-      currentCards.push(monthEndCard);
-    }
-
-    const existingSubItems = [...(monthEndCard.subItems || [])];
-
-    // 2-1. 社会保険料（会社負担＋本人分合算）
-    if (socialInsTotal > 0) {
-      const socIdx = existingSubItems.findIndex(i => i.name.includes('社会保険料'));
-      if (socIdx >= 0) {
-        existingSubItems[socIdx] = {
-          ...existingSubItems[socIdx],
-          defaultAmount: socialInsTotal,
-          memo: `社保本人+会社負担分合算 (${targetMonth}給与台帳)`,
-        };
-      } else {
-        existingSubItems.push({
-          id: `sub-soc-${Date.now()}`,
-          name: '社会保険料納付（会社負担＋本人分合算）',
-          category: '法定福利費',
-          costType: 'fixed',
-          defaultAmount: socialInsTotal,
-          store: '全社共通',
-          memo: `健保・厚年・介護・子ども子育て (本人+会社負担合算)`,
-        });
-      }
-    }
-
-    // 2-2. 労働保険
-    if (laborInsTotal > 0) {
-      const laborIdx = existingSubItems.findIndex(i => i.name.includes('雇用保険') || i.name.includes('労働保険'));
-      if (laborIdx >= 0) {
-        existingSubItems[laborIdx] = {
-          ...existingSubItems[laborIdx],
-          defaultAmount: laborInsTotal,
-          memo: `雇用保険 会社負担分 (${targetMonth}給与台帳)`,
-        };
-      } else {
-        existingSubItems.push({
-          id: `sub-labor-${Date.now()}`,
-          name: '雇用保険・労働保険（会社負担分）',
-          category: '法定福利費',
-          costType: 'fixed',
-          defaultAmount: laborInsTotal,
-          store: '全社共通',
-          memo: '事業主会社負担分',
-        });
-      }
-    }
-
-    // 2-3. 源泉税・住民税
-    if (taxesTotal > 0) {
-      const taxIdx = existingSubItems.findIndex(i => i.name.includes('源泉') || i.name.includes('税金納付'));
-      if (taxIdx >= 0) {
-        existingSubItems[taxIdx] = {
-          ...existingSubItems[taxIdx],
-          defaultAmount: taxesTotal,
-          memo: `源泉所得税+住民税 天引き預り金納付 (${targetMonth}給与台帳)`,
-        };
-      } else {
-        existingSubItems.push({
-          id: `sub-tax-${Date.now()}`,
-          name: '源泉所得税・住民税（預り金納付）',
-          category: '租税公課',
-          costType: 'fixed',
-          defaultAmount: taxesTotal,
-          store: '全社共通',
-          memo: '給与天引き分の月末納付',
-        });
-      }
-    }
-
-    monthEndCard.subItems = existingSubItems;
-    monthEndCard.defaultAmount = summary.monthEndSummary.totalMonthEndPayment;
-
-    const hasSalary = currentCards.some(c => c.id === salaryCard!.id);
-    let updatedCards = currentCards.map(c => {
-      if (c.id === salaryCard!.id) return salaryCard!;
-      if (c.id === monthEndCard!.id) return monthEndCard!;
-      return c;
-    });
-    if (!hasSalary) {
-      updatedCards = [salaryCard!, ...updatedCards];
-    }
-
-    const updatedSettings: AppSettings = {
-      ...settings,
-      expenseCards: updatedCards,
-    };
+    const updatedSettings = applySalaryCardsSync(settings, summary, targetMonth);
 
     setSettings(updatedSettings);
     saveSettings(updatedSettings);
     syncSaveSettingsToFirestore(updatedSettings);
 
     if (!silent) {
+      const socialInsTotal = summary.monthEndSummary.socialInsurancePayment;
       handleSendMessage(
         `✅ 【給与計算結果を経費カード設定へ反映しました】\n` +
         `・役員報酬: ¥${summary.totalExecutiveRemuneration.toLocaleString()} (${summary.executiveCount}名)\n` +
