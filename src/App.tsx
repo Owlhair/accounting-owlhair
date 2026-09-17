@@ -1064,6 +1064,18 @@ export default function App() {
     }
   };
 
+  // Handler: Save Categories (Expense & Sales)
+  const handleSaveCategories = (newExpenseCategories: string[], newSalesCategories: string[]) => {
+    const updatedSettings: AppSettings = {
+      ...settings,
+      expenseCategories: newExpenseCategories,
+      salesCategories: newSalesCategories,
+    };
+    setSettings(updatedSettings);
+    saveSettings(updatedSettings);
+    syncSaveSettingsToFirestore(updatedSettings);
+  };
+
   // Handler: Reset to Sample Demo Data
   const handleResetSampleData = () => {
     const data = resetToSampleData();
@@ -1176,6 +1188,7 @@ export default function App() {
         onOpenAddSales={() => setIsAddSalesOpen(true)}
         onOpenAddExpense={() => setIsAddExpenseOpen(true)}
         onOpenBackup={() => setIsBackupOpen(true)}
+        onOpenSettings={() => setIsFiscalSettingsOpen(true)}
         onOpenChat={() => setIsChatOpen(true)}
         onOpenPwaModal={() => setIsPwaModalOpen(true)}
         onLockApp={handleLockApp}
@@ -1412,7 +1425,10 @@ export default function App() {
         fiscalSettings={settings.fiscalSettings}
         stores={settings.stores}
         closedStores={settings.closedStores}
+        expenseCategories={settings.expenseCategories}
+        salesCategories={settings.salesCategories}
         onSaveSettings={handleSaveSettings}
+        onSaveCategories={handleSaveCategories}
         onOpenBackup={() => setIsBackupOpen(true)}
       />
 

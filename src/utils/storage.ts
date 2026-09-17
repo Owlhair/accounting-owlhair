@@ -13,6 +13,7 @@ export const DEFAULT_SALES_CATEGORIES = [
 export const DEFAULT_EXPENSE_CATEGORIES = [
   '仕入',
   '消耗品費',
+  '修繕費',
   '通信費',
   '水道光熱費',
   '旅費交通費',
@@ -20,6 +21,7 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
   '地代家賃',
   '役員報酬',
   '給料手当',
+  '法定福利費',
   '外注費',
   '車両費',
   '租税公課',
@@ -411,9 +413,14 @@ export const loadSettings = (): AppSettings => {
       }
     }
 
+    let expenseCategories = parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES;
+    if (!expenseCategories.includes('修繕費')) {
+      expenseCategories = [...expenseCategories, '修繕費'];
+    }
+
     return {
       salesCategories: parsed.salesCategories || DEFAULT_SALES_CATEGORIES,
-      expenseCategories: parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES,
+      expenseCategories,
       paymentMethods,
       stores,
       closedStores,

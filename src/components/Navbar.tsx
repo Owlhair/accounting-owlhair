@@ -18,6 +18,7 @@ import {
   Cloud,
   CloudCheck,
   RefreshCw,
+  Settings,
 } from 'lucide-react';
 import { getActiveFileName } from '../utils/fileSystemSync';
 
@@ -29,6 +30,7 @@ interface NavbarProps {
   onOpenAddSales: () => void;
   onOpenAddExpense: () => void;
   onOpenBackup: () => void;
+  onOpenSettings?: () => void;
   onOpenChat?: () => void;
   onOpenPwaModal?: () => void;
   onLockApp?: () => void;
@@ -46,6 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAddSales,
   onOpenAddExpense,
   onOpenBackup,
+  onOpenSettings,
   onOpenChat,
   onOpenPwaModal,
   onLockApp,
@@ -253,14 +256,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onOpenBackup}
-              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200 relative"
-              title="ファイル自動同期 / バックアップ / 設定"
+              className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200 relative cursor-pointer"
+              title="ファイル同期 / バックアップ"
             >
               <FileSpreadsheet className="w-4 h-4" />
               {activeFileName && (
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
               )}
             </button>
+
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="p-1.5 text-gray-600 hover:text-indigo-600 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200 cursor-pointer"
+                title="設定メニュー（決算期 / 店舗 / 勘定科目）"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
 
             {onLockApp && (
               <button
