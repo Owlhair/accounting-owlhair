@@ -23,6 +23,10 @@ import {
   ArrowDownToLine,
   Check,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
+  ArrowUpDown,
   ExternalLink,
   ArrowRightLeft,
   AlertTriangle,
@@ -1550,6 +1554,107 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     showToast('品目を削除しました');
   };
 
+  // REORDER FEATURE 1: Move sub-item up or down
+  const handleMoveSubItem = (cardId: string, subItemId: string, direction: 'up' | 'down') => {
+    const targetCard = expenseCards.find((c) => c.id === cardId);
+    if (!targetCard || !targetCard.subItems || targetCard.subItems.length <= 1) return;
+
+    const currentIndex = targetCard.subItems.findIndex((s) => s.id === subItemId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= targetCard.subItems.length) return;
+
+    const newSubItems = [...targetCard.subItems];
+    const temp = newSubItems[currentIndex];
+    newSubItems[currentIndex] = newSubItems[targetIndex];
+    newSubItems[targetIndex] = temp;
+
+    const updatedCard: ExpenseCard = { ...targetCard, subItems: newSubItems };
+    const updatedCards = expenseCards.map((c) => (c.id === cardId ? updatedCard : c));
+    onSaveExpenseCards(updatedCards);
+    showToast(`品目「${temp.name}」を${direction === 'up' ? '上' : '下'}（${targetIndex + 1}番目）に移動しました`);
+  };
+
+  // REORDER FEATURE 2: HTML5 Drag & Drop for sub-items
+  const [draggedSubItemInfo, setDraggedSubItemInfo] = useState<{ cardId: string; subItemId: string } | null>(null);
+  const [dragOverSubItemId, setDragOverSubItemId] = useState<string | null>(null);
+
+  const handleSubItemDragStart = (e: React.DragEvent, cardId: string, subItemId: string) => {
+    setDraggedSubItemInfo({ cardId, subItemId });
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', subItemId);
+    } catch (err) {}
+  };
+
+  const handleSubItemDragOver = (e: React.DragEvent, targetSubItemId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverSubItemId !== targetSubItemId) {
+      setDragOverSubItemId(targetSubItemId);
+    }
+  };
+
+  const handleSubItemDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleSubItemDrop = (e: React.DragEvent, cardId: string, targetSubItemId: string) => {
+    e.preventDefault();
+    setDragOverSubItemId(null);
+    if (!draggedSubItemInfo || draggedSubItemInfo.cardId !== cardId) {
+      setDraggedSubItemInfo(null);
+      return;
+    }
+    const sourceId = draggedSubItemInfo.subItemId;
+    if (sourceId === targetSubItemId) {
+      setDraggedSubItemInfo(null);
+      return;
+    }
+
+    const targetCard = expenseCards.find((c) => c.id === cardId);
+    if (!targetCard || !targetCard.subItems) {
+      setDraggedSubItemInfo(null);
+      return;
+    }
+
+    const fromIndex = targetCard.subItems.findIndex((s) => s.id === sourceId);
+    const toIndex = targetCard.subItems.findIndex((s) => s.id === targetSubItemId);
+
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggedSubItemInfo(null);
+      return;
+    }
+
+    const newSubItems = [...targetCard.subItems];
+    const [movedItem] = newSubItems.splice(fromIndex, 1);
+    newSubItems.splice(toIndex, 0, movedItem);
+
+    const updatedCard: ExpenseCard = { ...targetCard, subItems: newSubItems };
+    const updatedCards = expenseCards.map((c) => (c.id === cardId ? updatedCard : c));
+    onSaveExpenseCards(updatedCards);
+    setDraggedSubItemInfo(null);
+    showToast(`「${movedItem.name}」を${toIndex + 1}番目に移動しました`);
+  };
+
+  // REORDER FEATURE 3: Move whole card order
+  const handleMoveCard = (cardId: string, direction: 'up' | 'down') => {
+    const currentIndex = expenseCards.findIndex((c) => c.id === cardId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= expenseCards.length) return;
+
+    const newCards = [...expenseCards];
+    const temp = newCards[currentIndex];
+    newCards[currentIndex] = newCards[targetIndex];
+    newCards[targetIndex] = temp;
+
+    onSaveExpenseCards(newCards);
+    showToast(`カード「${temp.title}」を${direction === 'up' ? '前' : '後ろ'}に並び替えました`);
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* Floating Toast Notification */}
@@ -1929,6 +2034,26 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
                       {/* Card Action Menu */}
                       <div className="flex items-center gap-1 bg-black/20 backdrop-blur-xs p-1 rounded-xl">
+                        {/* Card Reorder Buttons */}
+                        <div className="flex items-center bg-white/10 rounded-lg p-0.5 border border-white/20 mr-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveCard(card.id, 'up')}
+                            className="p-1 text-white/80 hover:text-white rounded hover:bg-white/20 transition-colors cursor-pointer"
+                            title="カードを前（左/上）へ並び替え"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveCard(card.id, 'down')}
+                            className="p-1 text-white/80 hover:text-white rounded hover:bg-white/20 transition-colors cursor-pointer"
+                            title="カードを後（右/下）へ並び替え"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => handleOpenMoveCardModal(card)}
@@ -2072,27 +2197,62 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                       );
                     })()}
 
+                    {hasSubItems && (
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 pt-1">
+                        <span className="font-bold flex items-center gap-1 text-slate-700">
+                          <span>内訳・品目 ({card.subItems!.length}件)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                          <span>↑↓やドラッグで明細順に並び替え</span>
+                        </span>
+                      </div>
+                    )}
+
                     {hasSubItems ? (
-                      card.subItems!.map((sub) => {
+                      card.subItems!.map((sub, subIdx) => {
+                        const totalSubs = card.subItems!.length;
                         const key = `${card.id}_${sub.id}`;
                         const currentVal = (inputs[key]?.amount !== undefined && inputs[key]?.amount !== '')
                           ? inputs[key]!.amount
                           : (sub.defaultAmount ? String(sub.defaultAmount) : '');
                         const isSelected = inputs[key]?.isSelected ?? true;
                         const isFixed = sub.costType === 'fixed';
+                        const isDraggingThis = draggedSubItemInfo?.cardId === card.id && draggedSubItemInfo?.subItemId === sub.id;
+                        const isDragOverThis = dragOverSubItemId === sub.id;
 
                         return (
                           <div
                             key={sub.id}
+                            draggable
+                            onDragStart={(e) => handleSubItemDragStart(e, card.id, sub.id)}
+                            onDragOver={(e) => handleSubItemDragOver(e, sub.id)}
+                            onDragLeave={handleSubItemDragLeave}
+                            onDrop={(e) => handleSubItemDrop(e, card.id, sub.id)}
                             className={`p-3 rounded-2xl border transition-all ${
-                              isSelected
+                              isDraggingThis
+                                ? 'opacity-40 border-dashed border-indigo-400 bg-indigo-50/50'
+                                : isDragOverThis
+                                ? 'border-indigo-500 bg-indigo-50/40 scale-[1.01] shadow-md ring-2 ring-indigo-200'
+                                : isSelected
                                 ? 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                                 : 'bg-slate-100/50 border-slate-200 opacity-60'
                             }`}
                           >
-                            {/* Item Title & Tags */}
+                            {/* Item Title & Reorder & Actions */}
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {/* Drag Handle & Order Badge */}
+                                <div
+                                  className="flex items-center gap-0.5 text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-slate-200/70 select-none"
+                                  title="ドラッグして明細の順番を入れ替え"
+                                >
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                  <span className="text-[10px] font-mono font-black text-slate-600 bg-white px-1 py-0.5 rounded border border-slate-200 shadow-2xs leading-none">
+                                    #{subIdx + 1}
+                                  </span>
+                                </div>
+
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
@@ -2105,6 +2265,36 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                               </div>
 
                               <div className="flex items-center gap-1 shrink-0">
+                                {/* Reorder Up / Down buttons */}
+                                <div className="flex items-center bg-slate-200/80 rounded-lg p-0.5 border border-slate-300/70 shadow-2xs mr-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={subIdx === 0}
+                                    onClick={() => handleMoveSubItem(card.id, sub.id, 'up')}
+                                    className={`p-1 rounded transition-all ${
+                                      subIdx === 0
+                                        ? 'text-slate-300 cursor-not-allowed'
+                                        : 'text-slate-700 hover:text-rose-600 hover:bg-white cursor-pointer active:scale-90'
+                                    }`}
+                                    title="上へ移動（明細書の上の行に合わせる）"
+                                  >
+                                    <ChevronUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={subIdx === totalSubs - 1}
+                                    onClick={() => handleMoveSubItem(card.id, sub.id, 'down')}
+                                    className={`p-1 rounded transition-all ${
+                                      subIdx === totalSubs - 1
+                                        ? 'text-slate-300 cursor-not-allowed'
+                                        : 'text-slate-700 hover:text-rose-600 hover:bg-white cursor-pointer active:scale-90'
+                                    }`}
+                                    title="下へ移動（明細書の下の行に合わせる）"
+                                  >
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+
                                 {/* Duplicate subItem button */}
                                 <button
                                   type="button"
@@ -2285,6 +2475,26 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                       </button>
                     )}
 
+                    {/* Card reorder buttons */}
+                    <div className="flex items-center bg-slate-200/80 rounded-lg p-0.5 border border-slate-300">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveCard(card.id, 'up')}
+                        className="p-1 text-slate-700 hover:text-rose-600 rounded hover:bg-white transition-colors cursor-pointer"
+                        title="カードを前（上）へ並び替え"
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveCard(card.id, 'down')}
+                        className="p-1 text-slate-700 hover:text-rose-600 rounded hover:bg-white transition-colors cursor-pointer"
+                        title="カードを後（下）へ並び替え"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => handleOpenMoveCardModal(card)}
@@ -2413,27 +2623,52 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                 {/* Sub items rows */}
                 <div className="divide-y divide-slate-100">
                   {hasSubItems ? (
-                    card.subItems!.map((sub) => {
+                    card.subItems!.map((sub, subIdx) => {
+                      const totalSubs = card.subItems!.length;
                       const key = `${card.id}_${sub.id}`;
                       const currentVal = (inputs[key]?.amount !== undefined && inputs[key]?.amount !== '')
                         ? inputs[key]!.amount
                         : (sub.defaultAmount ? String(sub.defaultAmount) : '');
                       const isSelected = inputs[key]?.isSelected ?? true;
                       const isFixed = sub.costType === 'fixed';
+                      const isDraggingThis = draggedSubItemInfo?.cardId === card.id && draggedSubItemInfo?.subItemId === sub.id;
+                      const isDragOverThis = dragOverSubItemId === sub.id;
 
                       return (
                         <div
                           key={sub.id}
+                          draggable
+                          onDragStart={(e) => handleSubItemDragStart(e, card.id, sub.id)}
+                          onDragOver={(e) => handleSubItemDragOver(e, sub.id)}
+                          onDragLeave={handleSubItemDragLeave}
+                          onDrop={(e) => handleSubItemDrop(e, card.id, sub.id)}
                           className={`p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
-                            isSelected ? 'hover:bg-slate-50/60' : 'bg-slate-50/40 opacity-60'
+                            isDraggingThis
+                              ? 'opacity-40 border-dashed border-2 border-indigo-400 bg-indigo-50/50'
+                              : isDragOverThis
+                              ? 'border-y-2 border-indigo-500 bg-indigo-50/40'
+                              : isSelected
+                              ? 'hover:bg-slate-50/60'
+                              : 'bg-slate-50/40 opacity-60'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2.5">
+                            {/* Drag Handle & Order Badge */}
+                            <div
+                              className="flex items-center gap-0.5 text-slate-400 hover:text-slate-700 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-slate-200/70 select-none shrink-0"
+                              title="ドラッグして明細の順番を入れ替え"
+                            >
+                              <GripVertical className="w-3.5 h-3.5" />
+                              <span className="text-[10px] font-mono font-black text-slate-600 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-2xs leading-none">
+                                #{subIdx + 1}
+                              </span>
+                            </div>
+
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => handleToggleSelect(key)}
-                              className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer"
+                              className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300 cursor-pointer shrink-0"
                             />
                             <div>
                               <div className="flex items-center gap-2">
@@ -2461,6 +2696,36 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2 self-end sm:self-auto">
+                            {/* Reorder Up / Down buttons */}
+                            <div className="flex items-center bg-slate-200/80 rounded-lg p-0.5 border border-slate-300 mr-1">
+                              <button
+                                type="button"
+                                disabled={subIdx === 0}
+                                onClick={() => handleMoveSubItem(card.id, sub.id, 'up')}
+                                className={`p-1 rounded transition-colors ${
+                                  subIdx === 0
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-slate-700 hover:text-rose-600 hover:bg-white cursor-pointer active:scale-95'
+                                }`}
+                                title="上へ移動（明細書の上の行に合わせる）"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={subIdx === totalSubs - 1}
+                                onClick={() => handleMoveSubItem(card.id, sub.id, 'down')}
+                                className={`p-1 rounded transition-colors ${
+                                  subIdx === totalSubs - 1
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-slate-700 hover:text-rose-600 hover:bg-white cursor-pointer active:scale-95'
+                                }`}
+                                title="下へ移動（明細書の下の行に合わせる）"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
                             <div className="relative w-32">
                               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-xs">
                                 ¥
