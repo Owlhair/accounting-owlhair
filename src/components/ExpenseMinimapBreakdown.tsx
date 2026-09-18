@@ -15,7 +15,8 @@ import {
   Trash2,
   AlertTriangle,
   Check,
-  X
+  X,
+  ThumbsUp
 } from 'lucide-react';
 import { Transaction, ExpenseCard } from '../types';
 
@@ -50,6 +51,25 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
   // Local state for inline delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isConfirmingBulkClean, setIsConfirmingBulkClean] = useState<boolean>(false);
+
+  // Acknowledged duplicates persistence (e.g. "ありがとう、でもこれで合ってるよ。")
+  const [acknowledgedDuplicateIds, setAcknowledgedDuplicateIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_acknowledged_duplicate_txs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [ackFeedback, setAckFeedback] = useState<string | null>(null);
+
+  const saveAcknowledgedDuplicates = (ids: string[]) => {
+    setAcknowledgedDuplicateIds(ids);
+    try {
+      localStorage.setItem('scratch_keiri_acknowledged_duplicate_txs', JSON.stringify(ids));
+    } catch (e) {}
+  };
 
   // Filter tab inside breakdown
   const [internalFilter, setInternalFilter] = useState<string>('all');
@@ -110,9 +130,10 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
   const allRegisteredTotal = allActiveMonthTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
   const isRegistered = allActiveMonthTxs.length > 0;
 
-  // Duplicate detection for this active month
+  // Duplicate detection for this active month (excluding acknowledged ones)
   const duplicateInfo = React.useMemo(() => {
-    const dups = new Set<string>();
+    const unackDups = new Set<string>();
+    const allDups = new Set<string>();
     const duplicateGroups: Record<string, Transaction[]> = {};
 
     activeMonthTxs.forEach((tx) => {
@@ -129,19 +150,65 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
 
     Object.values(duplicateGroups).forEach((group) => {
       if (group.length > 1) {
-        group.forEach((t) => dups.add(t.id));
-        // Sort by created_at desc if present, keep the earliest or latest, mark others redundant
-        const [keep, ...redundant] = group;
-        redundant.forEach((r) => redundantTxIds.push(r.id));
+        group.forEach((t) => {
+          allDups.add(t.id);
+          if (!acknowledgedDuplicateIds.includes(t.id)) {
+            unackDups.add(t.id);
+          }
+        });
+
+        // unconfirmed redundant items in group
+        const unackGroup = group.filter((t) => !acknowledgedDuplicateIds.includes(t.id));
+        if (unackGroup.length > 1) {
+          const [keep, ...redundant] = unackGroup;
+          redundant.forEach((r) => redundantTxIds.push(r.id));
+        }
       }
     });
 
+    const currentMonthTxIds = new Set(activeMonthTxs.map((t) => t.id));
+    const currentMonthAckCount = acknowledgedDuplicateIds.filter((id) => currentMonthTxIds.has(id)).length;
+
     return {
-      duplicateIds: dups,
+      duplicateIds: unackDups,
+      allDuplicateIds: allDups,
       redundantTxIds,
       count: redundantTxIds.length,
+      acknowledgedCount: currentMonthAckCount,
+      duplicateGroups,
     };
-  }, [activeMonthTxs]);
+  }, [activeMonthTxs, acknowledgedDuplicateIds]);
+
+  const handleAcknowledgeAllDuplicates = () => {
+    const toAdd = Array.from(duplicateInfo.duplicateIds);
+    if (toAdd.length === 0) return;
+    const nextList = Array.from(new Set([...acknowledgedDuplicateIds, ...toAdd]));
+    saveAcknowledgedDuplicates(nextList);
+    setAckFeedback(`『ありがとう、でもこれで合ってるよ。』を受け付けました。重複警告を非表示にしました。（${toAdd.length}件を正規計上として確認）`);
+    setTimeout(() => setAckFeedback(null), 5000);
+  };
+
+  const handleAcknowledgeSingleDuplicate = (txId: string) => {
+    const tx = activeMonthTxs.find((t) => t.id === txId);
+    if (!tx) return;
+    const descKey = (tx.description || '').replace(/\s+/g, '').slice(0, 10);
+    const key = `${tx.category}_${tx.amount}_${descKey}_${tx.store || ''}`;
+    const group = duplicateInfo.duplicateGroups[key] || [tx];
+    const peerIds = group.map((t) => t.id);
+
+    const nextList = Array.from(new Set([...acknowledgedDuplicateIds, ...peerIds]));
+    saveAcknowledgedDuplicates(nextList);
+    setAckFeedback(`「${tx.description || tx.category}」（¥${(tx.amount || 0).toLocaleString()}）の重複確認を完了し、警告を非表示にしました。`);
+    setTimeout(() => setAckFeedback(null), 4000);
+  };
+
+  const handleResetAcknowledgedDuplicates = () => {
+    const currentMonthTxIds = new Set(activeMonthTxs.map((t) => t.id));
+    const nextList = acknowledgedDuplicateIds.filter((id) => !currentMonthTxIds.has(id));
+    saveAcknowledgedDuplicates(nextList);
+    setAckFeedback('重複確認の記録をリセットし、警告を再表示しました。');
+    setTimeout(() => setAckFeedback(null), 4000);
+  };
 
   // 2. Planned cards list for this month (when reviewing or if un-registered)
   const plannedCardsData = React.useMemo(() => {
@@ -312,24 +379,71 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
 
           {activeMonthTxs.length > 0 ? (
             <div className="space-y-3">
+              {/* Feedback toast when user clicks "ありがとう、でもこれで合ってるよ。" */}
+              {ackFeedback && (
+                <div className="p-2.5 bg-emerald-50/95 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-950 flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{ackFeedback}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAckFeedback(null)}
+                    className="text-emerald-700 hover:text-emerald-900 text-xs px-1.5 py-0.5 rounded cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Acknowledged status note if duplicates were already verified as correct */}
+              {duplicateInfo.acknowledgedCount > 0 && duplicateInfo.count === 0 && (
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-700">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="font-medium">
+                      「これで合ってるよ」と確認済みの重複明細が <strong className="font-bold text-slate-900">{duplicateInfo.acknowledgedCount}件</strong> あります（正常な経費として計上中）
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetAcknowledgedDuplicates}
+                    className="text-slate-500 hover:text-rose-600 text-[11px] underline shrink-0 cursor-pointer self-end sm:self-auto"
+                  >
+                    確認を取り消して警告を再表示
+                  </button>
+                </div>
+              )}
+
               {/* Duplicate Detection Warning Banner & 1-Click Clean */}
               {duplicateInfo.count > 0 && (
-                <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
-                  <div className="flex items-start sm:items-center gap-2">
+                <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-start sm:items-center gap-2 min-w-0">
                     <div className="p-1.5 bg-amber-100 rounded-lg text-amber-700 shrink-0 mt-0.5 sm:mt-0">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                     <div>
                       <span className="text-xs font-bold text-amber-950 block">
-                        給与・経費の重複計上（{duplicateInfo.count}件）が検出されました
+                        支払先・金額が同一の重複計上（{duplicateInfo.count}件）が検出されました
                       </span>
                       <span className="text-[11px] text-amber-800 block">
-                        同じ科目や金額が複数回登録されています。各カードの「削除」ボタン、または右の一括ボタンで重複分を整理できます。
+                        同額の定期サービスや複数回購入など正しい支出の場合は、ボタンを押すと警告を消せます。
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                    {/* The User's Requested "ありがとう、でもこれで合ってるよ。" button */}
+                    <button
+                      type="button"
+                      onClick={handleAcknowledgeAllDuplicates}
+                      className="px-3 py-1.5 text-xs font-black text-emerald-900 bg-emerald-100 hover:bg-emerald-200 active:bg-emerald-300 rounded-lg border border-emerald-300 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      title="重複ではなく、この内容で正しい支払いとして承認し警告を消す"
+                    >
+                      <ThumbsUp className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>ありがとう、でもこれで合ってるよ。</span>
+                    </button>
+
                     {isConfirmingBulkClean ? (
                       <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-amber-300 shadow-xs">
                         <span className="text-[11px] font-bold text-rose-800">
@@ -359,10 +473,11 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
                       <button
                         type="button"
                         onClick={() => setIsConfirmingBulkClean(true)}
-                        className="px-2.5 py-1 text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 rounded-lg border border-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="px-2.5 py-1.5 text-xs font-medium text-amber-900 bg-amber-200/70 hover:bg-amber-300 rounded-lg border border-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                        title="誤って二重計上された重複分を削除"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-amber-800" />
-                        <span>重複分（{duplicateInfo.count}件）を一括整理</span>
+                        <span>重複分を削除</span>
                       </button>
                     )}
                   </div>
@@ -373,6 +488,7 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                 {activeMonthTxs.map((tx) => {
                   const isDuplicate = duplicateInfo.duplicateIds.has(tx.id);
+                  const isAcknowledged = acknowledgedDuplicateIds.includes(tx.id);
                   const isConfirming = confirmDeleteId === tx.id;
 
                   return (
@@ -381,12 +497,14 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
                       className={`bg-white p-3 rounded-xl border transition-all flex flex-col justify-between ${
                         isDuplicate 
                           ? 'border-amber-300 bg-amber-50/20 shadow-xs' 
-                          : 'border-slate-200/90 shadow-2xs hover:border-slate-300'
+                          : isAcknowledged
+                            ? 'border-emerald-200/90 shadow-2xs hover:border-emerald-300'
+                            : 'border-slate-200/90 shadow-2xs hover:border-slate-300'
                       }`}
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-1 flex-wrap">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-wrap">
                             <span
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getCategoryBadgeClass(
                                 tx.category
@@ -395,9 +513,26 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
                               {tx.category}
                             </span>
                             {isDuplicate && (
-                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 rounded border border-amber-300">
-                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-                                重複の疑い
+                              <div className="flex items-center gap-1">
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 rounded border border-amber-300">
+                                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                  重複の疑い
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAcknowledgeSingleDuplicate(tx.id)}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded cursor-pointer transition-colors shadow-2xs"
+                                  title="この支払いは重複ではなくこれで合っているとして警告を非表示にする"
+                                >
+                                  <ThumbsUp className="w-2.5 h-2.5 text-emerald-600" />
+                                  これで合ってるよ
+                                </button>
+                              </div>
+                            )}
+                            {isAcknowledged && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-emerald-50 text-emerald-800 rounded border border-emerald-200">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                確認済み
                               </span>
                             )}
                           </div>

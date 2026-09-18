@@ -14,7 +14,8 @@ import {
   Building2,
   Edit3,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  ThumbsUp
 } from 'lucide-react';
 import { SalaryEmployee, Transaction, SalaryCalculationResult } from '../types';
 import { calculateTotalSalarySummary } from '../utils/salaryCalculator';
@@ -55,6 +56,25 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isConfirmingBulkClean, setIsConfirmingBulkClean] = useState<boolean>(false);
 
+  // Acknowledged duplicates persistence (e.g. "ありがとう、でもこれで合ってるよ。")
+  const [acknowledgedDuplicateIds, setAcknowledgedDuplicateIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_acknowledged_duplicate_txs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [ackFeedback, setAckFeedback] = useState<string | null>(null);
+
+  const saveAcknowledgedDuplicates = (ids: string[]) => {
+    setAcknowledgedDuplicateIds(ids);
+    try {
+      localStorage.setItem('scratch_keiri_acknowledged_duplicate_txs', JSON.stringify(ids));
+    } catch (e) {}
+  };
+
   // Find registered salary transactions for this activeMonth
   const salaryTxs = React.useMemo(() => {
     return transactions.filter(
@@ -73,7 +93,8 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
 
   // Duplicate detection among registered salary transactions
   const duplicateInfo = React.useMemo(() => {
-    const dups = new Set<string>();
+    const unackDups = new Set<string>();
+    const allDups = new Set<string>();
     const groups: Record<string, Transaction[]> = {};
 
     salaryTxs.forEach((t) => {
@@ -88,19 +109,64 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
 
     Object.values(groups).forEach((group) => {
       if (group.length > 1) {
-        group.forEach((t) => dups.add(t.id));
-        // Keep the first, mark remainder as redundant
-        const [keep, ...redundant] = group;
-        redundant.forEach((r) => redundantTxIds.push(r.id));
+        group.forEach((t) => {
+          allDups.add(t.id);
+          if (!acknowledgedDuplicateIds.includes(t.id)) {
+            unackDups.add(t.id);
+          }
+        });
+
+        const unackGroup = group.filter((t) => !acknowledgedDuplicateIds.includes(t.id));
+        if (unackGroup.length > 1) {
+          const [keep, ...redundant] = unackGroup;
+          redundant.forEach((r) => redundantTxIds.push(r.id));
+        }
       }
     });
 
+    const currentMonthTxIds = new Set(salaryTxs.map((t) => t.id));
+    const currentMonthAckCount = acknowledgedDuplicateIds.filter((id) => currentMonthTxIds.has(id)).length;
+
     return {
-      duplicateIds: dups,
+      duplicateIds: unackDups,
+      allDuplicateIds: allDups,
       redundantTxIds,
       count: redundantTxIds.length,
+      acknowledgedCount: currentMonthAckCount,
+      groups,
     };
-  }, [salaryTxs]);
+  }, [salaryTxs, acknowledgedDuplicateIds]);
+
+  const handleAcknowledgeAllDuplicates = () => {
+    const toAdd = Array.from(duplicateInfo.duplicateIds);
+    if (toAdd.length === 0) return;
+    const nextList = Array.from(new Set([...acknowledgedDuplicateIds, ...toAdd]));
+    saveAcknowledgedDuplicates(nextList);
+    setAckFeedback(`『ありがとう、でもこれで合ってるよ。』を受け付けました。重複警告を非表示にしました。（${toAdd.length}件を正規計上として確認）`);
+    setTimeout(() => setAckFeedback(null), 5000);
+  };
+
+  const handleAcknowledgeSingleDuplicate = (txId: string) => {
+    const tx = salaryTxs.find((t) => t.id === txId);
+    if (!tx) return;
+    const cleanDesc = (tx.description || '').replace(/\s+/g, '').slice(0, 10);
+    const key = `${tx.category}_${tx.amount}_${cleanDesc}_${tx.store || ''}`;
+    const group = duplicateInfo.groups[key] || [tx];
+    const peerIds = group.map((t) => t.id);
+
+    const nextList = Array.from(new Set([...acknowledgedDuplicateIds, ...peerIds]));
+    saveAcknowledgedDuplicates(nextList);
+    setAckFeedback(`「${tx.description || tx.category}」（¥${(tx.amount || 0).toLocaleString()}）の重複確認を完了しました。`);
+    setTimeout(() => setAckFeedback(null), 4000);
+  };
+
+  const handleResetAcknowledgedDuplicates = () => {
+    const currentMonthTxIds = new Set(salaryTxs.map((t) => t.id));
+    const nextList = acknowledgedDuplicateIds.filter((id) => !currentMonthTxIds.has(id));
+    saveAcknowledgedDuplicates(nextList);
+    setAckFeedback('重複確認の記録をリセットし、警告を再表示しました。');
+    setTimeout(() => setAckFeedback(null), 4000);
+  };
 
   const registeredSalaryTotal = salaryTxs
     .filter((t) => t.category === '役員報酬' || t.category === '給料手当')
@@ -274,6 +340,40 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
           {/* Registered transactions reference (if any) */}
           {salaryTxs.length > 0 && (
             <div className="mt-2.5 pt-2.5 border-t border-slate-200/80 space-y-2">
+              {/* Feedback toast */}
+              {ackFeedback && (
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-950 flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{ackFeedback}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAckFeedback(null)}
+                    className="text-emerald-700 hover:text-emerald-900 text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Acknowledged info note */}
+              {duplicateInfo.acknowledgedCount > 0 && duplicateInfo.count === 0 && (
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-2 text-[11px] text-slate-700">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    「これで合ってるよ」と確認済みの給与明細が {duplicateInfo.acknowledgedCount}件 あります
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResetAcknowledgedDuplicates}
+                    className="text-slate-500 hover:text-rose-600 underline text-[10px] cursor-pointer"
+                  >
+                    確認を取り消す
+                  </button>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                 <span className="text-[11px] font-bold text-slate-700 block">
                   出納帳に計上されている給与・社保の取引レコード ({salaryTxs.length}件):
@@ -281,7 +381,17 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
 
                 {/* Bulk clean duplicates button if found */}
                 {duplicateInfo.count > 0 && (
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleAcknowledgeAllDuplicates}
+                      className="px-2 py-0.5 text-[10px] font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 rounded border border-emerald-300 flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      title="重複ではなく、この内容で正しい支払いとして承認し警告を消す"
+                    >
+                      <ThumbsUp className="w-3 h-3 text-emerald-700" />
+                      <span>ありがとう、でもこれで合ってるよ。</span>
+                    </button>
+
                     {isConfirmingBulkClean ? (
                       <div className="flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-amber-300">
                         <span className="text-[10px] font-bold text-rose-800">
@@ -311,7 +421,7 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
                       <button
                         type="button"
                         onClick={() => setIsConfirmingBulkClean(true)}
-                        className="px-2 py-0.5 text-[10px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 rounded border border-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
+                        className="px-2 py-0.5 text-[10px] font-medium text-amber-900 bg-amber-100 hover:bg-amber-200 rounded border border-amber-300 flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Trash2 className="w-3 h-3 text-amber-700" />
                         <span>給与の重複（{duplicateInfo.count}件）を一括削除</span>
@@ -326,7 +436,7 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
                 <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span>
-                    同じ科目の給与仕訳が重複して計上されています。不要な行の「削除」ボタン、または右上の「一括削除」で整理してください。
+                    同じ科目の給与仕訳が重複して計上されています。意図した正常な支出の場合は「これで合ってるよ」を押すと警告を非表示にできます。
                   </span>
                 </div>
               )}
@@ -334,6 +444,7 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
               <div className="space-y-1.5">
                 {salaryTxs.map((t) => {
                   const isDuplicate = duplicateInfo.duplicateIds.has(t.id);
+                  const isAcknowledged = acknowledgedDuplicateIds.includes(t.id);
                   const isConfirming = confirmDeleteId === t.id;
 
                   return (
@@ -342,17 +453,36 @@ export const SalaryMinimapBreakdown: React.FC<SalaryMinimapBreakdownProps> = ({
                       className={`text-[11px] bg-white px-2.5 py-2 rounded-lg border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                         isDuplicate
                           ? 'border-amber-300 bg-amber-50/20'
-                          : 'border-slate-200/80 hover:border-slate-300'
+                          : isAcknowledged
+                            ? 'border-emerald-200/80'
+                            : 'border-slate-200/80 hover:border-slate-300'
                       }`}
                     >
-                      <div className="flex items-center gap-2 truncate">
+                      <div className="flex items-center gap-2 truncate flex-wrap">
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
                           {t.category}
                         </span>
                         {isDuplicate && (
-                          <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 rounded border border-amber-300 shrink-0">
-                            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-                            重複
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-900 rounded border border-amber-300">
+                              <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                              重複
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAcknowledgeSingleDuplicate(t.id)}
+                              className="px-1.5 py-0.5 text-[9px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded cursor-pointer transition-colors shadow-2xs flex items-center gap-0.5"
+                              title="この給与明細はこれで合っているとして確認"
+                            >
+                              <ThumbsUp className="w-2.5 h-2.5 text-emerald-600" />
+                              合ってるよ
+                            </button>
+                          </div>
+                        )}
+                        {isAcknowledged && (
+                          <span className="inline-flex items-center gap-0.5 px-1 py-0.5 text-[9px] font-bold bg-emerald-50 text-emerald-800 rounded border border-emerald-200 shrink-0">
+                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                            確認済み
                           </span>
                         )}
                         <span className="truncate text-slate-700 font-medium">
