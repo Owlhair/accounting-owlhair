@@ -24,6 +24,7 @@ import {
   Check,
   ChevronRight,
   ExternalLink,
+  ArrowRightLeft,
 } from 'lucide-react';
 import {
   ExpenseCard,
@@ -36,6 +37,38 @@ import {
 } from '../types';
 import { ExpenseMinimapBreakdown } from './ExpenseMinimapBreakdown';
 import { DEFAULT_EXPENSE_CARDS } from '../utils/storage';
+
+// LocalStorage key for draft inputs entered per month in expense cards
+const DRAFT_STORAGE_KEY = 'scratch_keiri_expense_cards_monthly_drafts';
+
+const loadMonthlyDrafts = (): Record<string, Record<string, { amount: string; date: string; memo: string; isSelected: boolean }>> => {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error('Failed to load expense card drafts', e);
+  }
+  return {};
+};
+
+const saveMonthlyDrafts = (drafts: Record<string, Record<string, { amount: string; date: string; memo: string; isSelected: boolean }>>) => {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(drafts));
+  } catch (e) {
+    console.error('Failed to save expense card drafts', e);
+  }
+};
+
+// Helper to safely shift a date string (YYYY-MM-DD) into targetMonth (YYYY-MM)
+const moveDateToMonth = (dateStr: string | undefined, targetMonth: string): string => {
+  if (!dateStr) return `${targetMonth}-25`;
+  const parts = dateStr.split('-');
+  const origDay = parts.length >= 3 ? Number(parts[2]) : 25;
+  const [newYear, newMonth] = targetMonth.split('-').map(Number);
+  const maxDayInNewMonth = new Date(newYear, newMonth, 0).getDate();
+  const newDay = Math.min(origDay || 25, maxDayInNewMonth);
+  return `${targetMonth}-${String(newDay).padStart(2, '0')}`;
+};
 
 interface BatchExpenseItem {
   title: string;
@@ -61,6 +94,7 @@ interface ExpenseCardsViewProps {
   onRegisterSalaryToTransactions?: (targetMonth: string) => void;
   onEditTransaction?: (tx: Transaction) => void;
   onDeleteTransaction?: (id: string) => void;
+  onBatchUpdateTransactions?: (updated: Transaction[], deletedIds?: string[]) => void;
 }
 
 export const TIMING_GROUP_CONFIG: Record<
@@ -141,6 +175,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   onRegisterSalaryToTransactions,
   onEditTransaction,
   onDeleteTransaction,
+  onBatchUpdateTransactions,
 }) => {
   const expenseCards = useMemo(() => {
     let cards = settings.expenseCards && settings.expenseCards.length > 0 ? settings.expenseCards : DEFAULT_EXPENSE_CARDS;
@@ -257,10 +292,16 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   // Toggle for Pattern B minimap constituent cards breakdown
   const [showMinimapBreakdown, setShowMinimapBreakdown] = useState<boolean>(true);
 
+  // Monthly Drafts state (preserves amounts and inputs entered across months in memory & localStorage)
+  const [monthlyDrafts, setMonthlyDrafts] = useState<
+    Record<string, Record<string, { amount: string; date: string; memo: string; isSelected: boolean }>>
+  >(() => loadMonthlyDrafts());
+
   // Helper to build inputs for a specific month
   const buildInputsForMonth = useCallback(
     (targetMonth: string, cards: ExpenseCard[]) => {
       const initial: Record<string, { amount: string; date: string; memo: string; isSelected: boolean }> = {};
+      const targetDraft = monthlyDrafts[targetMonth];
 
       // Transactions for this target month in the ledger
       const monthTxs = transactions.filter(
@@ -280,6 +321,14 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         if (card.subItems && card.subItems.length > 0) {
           card.subItems.forEach((sub) => {
             const key = `${card.id}_${sub.id}`;
+            if (targetDraft && targetDraft[key] !== undefined) {
+              initial[key] = {
+                ...targetDraft[key],
+                date: targetDraft[key].date || defaultDate,
+              };
+              return;
+            }
+
             if (monthTxs.length > 0) {
               const matchedTx = monthTxs.find(
                 (tx) =>
@@ -307,6 +356,14 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           });
         } else {
           const key = card.id;
+          if (targetDraft && targetDraft[key] !== undefined) {
+            initial[key] = {
+              ...targetDraft[key],
+              date: targetDraft[key].date || defaultDate,
+            };
+            return;
+          }
+
           if (monthTxs.length > 0) {
             const matchedTx = monthTxs.find(
               (tx) =>
@@ -336,7 +393,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
       return initial;
     },
-    [transactions, settings.salarySettings]
+    [transactions, settings.salarySettings, monthlyDrafts]
   );
 
   // Input states keyed by "cardId" or "cardId_subItemId"
@@ -451,43 +508,119 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
   // Input change helpers
   const handleAmountChange = (key: string, val: string) => {
-    setInputs((prev) => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] || { date: `${activeMonth}-25`, memo: '', isSelected: true }),
-        amount: val,
-      },
-    }));
+    setInputs((prev) => {
+      const next = {
+        ...prev,
+        [key]: {
+          ...(prev[key] || { date: `${activeMonth}-25`, memo: '', isSelected: true }),
+          amount: val,
+        },
+      };
+      return next;
+    });
+
+    setMonthlyDrafts((prev) => {
+      const curMonth = prev[activeMonth] || {};
+      const updated = {
+        ...prev,
+        [activeMonth]: {
+          ...curMonth,
+          [key]: {
+            ...(curMonth[key] || inputs[key] || { date: `${activeMonth}-25`, memo: '', isSelected: true }),
+            amount: val,
+          },
+        },
+      };
+      saveMonthlyDrafts(updated);
+      return updated;
+    });
   };
 
   const handleDateChange = (key: string, val: string) => {
-    setInputs((prev) => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] || { amount: '', memo: '', isSelected: true }),
-        date: val,
-      },
-    }));
+    setInputs((prev) => {
+      const next = {
+        ...prev,
+        [key]: {
+          ...(prev[key] || { amount: '', memo: '', isSelected: true }),
+          date: val,
+        },
+      };
+      return next;
+    });
+
+    setMonthlyDrafts((prev) => {
+      const curMonth = prev[activeMonth] || {};
+      const updated = {
+        ...prev,
+        [activeMonth]: {
+          ...curMonth,
+          [key]: {
+            ...(curMonth[key] || inputs[key] || { amount: '', memo: '', isSelected: true }),
+            date: val,
+          },
+        },
+      };
+      saveMonthlyDrafts(updated);
+      return updated;
+    });
   };
 
   const handleMemoChange = (key: string, val: string) => {
-    setInputs((prev) => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] || { amount: '', date: `${activeMonth}-25`, isSelected: true }),
-        memo: val,
-      },
-    }));
+    setInputs((prev) => {
+      const next = {
+        ...prev,
+        [key]: {
+          ...(prev[key] || { amount: '', date: `${activeMonth}-25`, isSelected: true }),
+          memo: val,
+        },
+      };
+      return next;
+    });
+
+    setMonthlyDrafts((prev) => {
+      const curMonth = prev[activeMonth] || {};
+      const updated = {
+        ...prev,
+        [activeMonth]: {
+          ...curMonth,
+          [key]: {
+            ...(curMonth[key] || inputs[key] || { amount: '', date: `${activeMonth}-25`, isSelected: true }),
+            memo: val,
+          },
+        },
+      };
+      saveMonthlyDrafts(updated);
+      return updated;
+    });
   };
 
   const handleToggleSelect = (key: string) => {
-    setInputs((prev) => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] || { amount: '', date: `${activeMonth}-25`, memo: '', isSelected: true }),
-        isSelected: !prev[key]?.isSelected,
-      },
-    }));
+    setInputs((prev) => {
+      const next = {
+        ...prev,
+        [key]: {
+          ...(prev[key] || { amount: '', date: `${activeMonth}-25`, memo: '', isSelected: true }),
+          isSelected: !prev[key]?.isSelected,
+        },
+      };
+      return next;
+    });
+
+    setMonthlyDrafts((prev) => {
+      const curMonth = prev[activeMonth] || {};
+      const updated = {
+        ...prev,
+        [activeMonth]: {
+          ...curMonth,
+          [key]: {
+            ...(curMonth[key] || inputs[key] || { amount: '', date: `${activeMonth}-25`, memo: '', isSelected: true }),
+            isSelected: !(curMonth[key]?.isSelected ?? inputs[key]?.isSelected ?? true),
+          },
+        },
+      };
+      saveMonthlyDrafts(updated);
+      return updated;
+    });
   };
 
   const handleSetFixedAmount = (key: string, defaultAmount?: number) => {
@@ -640,6 +773,217 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     }));
 
     showToast(`品目「${newSubItem.name}」を複製しました`);
+  };
+
+  // MOVE / COPY FEATURE: Move or copy cards/amounts to another month
+  interface MoveMonthModalState {
+    isOpen: boolean;
+    mode: 'single' | 'all';
+    card?: ExpenseCard;
+  }
+
+  const [moveModalState, setMoveModalState] = useState<MoveMonthModalState | null>(null);
+  const [targetMoveMonth, setTargetMoveMonth] = useState<string>('');
+  const [moveActionType, setMoveActionType] = useState<'move' | 'copy'>('move');
+  const [includeTransactions, setIncludeTransactions] = useState<boolean>(true);
+
+  // All months across all fiscal periods for target picker
+  const allAvailableMonths = useMemo(() => {
+    const list: { month: string; label: string; periodLabel: string }[] = [];
+    fiscalPeriods.forEach((p) => {
+      (p.months || []).forEach((m) => {
+        if (!list.some((x) => x.month === m)) {
+          const [y, mm] = m.split('-');
+          list.push({
+            month: m,
+            label: `${y}年${parseInt(mm, 10)}月度`,
+            periodLabel: p.label,
+          });
+        }
+      });
+    });
+    return list;
+  }, [fiscalPeriods]);
+
+  // Helper to calculate next month string (e.g. "2025-06" -> "2025-07")
+  const getNextMonth = (monthStr: string): string => {
+    const [y, m] = monthStr.split('-').map(Number);
+    const nextDate = new Date(y, m, 1);
+    const nextY = nextDate.getFullYear();
+    const nextM = String(nextDate.getMonth() + 1).padStart(2, '0');
+    return `${nextY}-${nextM}`;
+  };
+
+  const nextMonthStr = useMemo(() => getNextMonth(activeMonth), [activeMonth]);
+
+  const handleOpenMoveCardModal = (card: ExpenseCard) => {
+    const months = currentPeriod.months || [];
+    const currentIdx = months.indexOf(activeMonth);
+    const nextM = currentIdx >= 0 && currentIdx < months.length - 1 
+      ? months[currentIdx + 1] 
+      : getNextMonth(activeMonth);
+
+    setTargetMoveMonth(nextM !== activeMonth ? nextM : (allAvailableMonths.find(m => m.month !== activeMonth)?.month || ''));
+    setMoveActionType('move');
+    setIncludeTransactions(true);
+    setMoveModalState({
+      isOpen: true,
+      mode: 'single',
+      card,
+    });
+  };
+
+  const handleOpenMoveMonthModal = () => {
+    const months = currentPeriod.months || [];
+    const currentIdx = months.indexOf(activeMonth);
+    const nextM = currentIdx >= 0 && currentIdx < months.length - 1 
+      ? months[currentIdx + 1] 
+      : getNextMonth(activeMonth);
+
+    setTargetMoveMonth(nextM !== activeMonth ? nextM : (allAvailableMonths.find(m => m.month !== activeMonth)?.month || ''));
+    setMoveActionType('move');
+    setIncludeTransactions(true);
+    setMoveModalState({
+      isOpen: true,
+      mode: 'all',
+    });
+  };
+
+  const handleExecuteMove = () => {
+    if (!moveModalState || !targetMoveMonth) {
+      alert('移動先の月を選択してください。');
+      return;
+    }
+    if (targetMoveMonth === activeMonth) {
+      alert('移動先の月には、現在と異なる月を指定してください。');
+      return;
+    }
+
+    const { mode, card } = moveModalState;
+    const sourceMonth = activeMonth;
+    const targetMonth = targetMoveMonth;
+
+    // 1. Identify which keys belong to this card / month
+    let targetKeys: string[] = [];
+    if (mode === 'single' && card) {
+      if (card.subItems && card.subItems.length > 0) {
+        targetKeys = card.subItems.map((s) => `${card.id}_${s.id}`);
+      } else {
+        targetKeys = [card.id];
+      }
+    } else {
+      // All cards
+      targetKeys = Object.keys(inputs);
+      expenseCards.forEach((c) => {
+        if (c.subItems && c.subItems.length > 0) {
+          c.subItems.forEach((s) => {
+            const k = `${c.id}_${s.id}`;
+            if (!targetKeys.includes(k)) targetKeys.push(k);
+          });
+        } else {
+          if (!targetKeys.includes(c.id)) targetKeys.push(c.id);
+        }
+      });
+    }
+
+    // 2. Drafts shift
+    const curSourceDraft = { ...(monthlyDrafts[sourceMonth] || inputs) };
+    const curTargetDraft = { ...(monthlyDrafts[targetMonth] || buildInputsForMonth(targetMonth, expenseCards)) };
+
+    let movedItemsCount = 0;
+    let movedTotalAmount = 0;
+
+    targetKeys.forEach((key) => {
+      const item = inputs[key] || curSourceDraft[key];
+      if (item && item.amount !== undefined && item.amount !== '' && Number(item.amount) > 0) {
+        const amtNum = Number(item.amount) || 0;
+        movedTotalAmount += amtNum;
+        movedItemsCount++;
+
+        const newDate = moveDateToMonth(item.date, targetMonth);
+        curTargetDraft[key] = {
+          ...item,
+          date: newDate,
+        };
+
+        if (moveActionType === 'move') {
+          curSourceDraft[key] = {
+            ...item,
+            amount: '',
+          };
+        }
+      }
+    });
+
+    const updatedAllDrafts = {
+      ...monthlyDrafts,
+      [sourceMonth]: curSourceDraft,
+      [targetMonth]: curTargetDraft,
+    };
+    setMonthlyDrafts(updatedAllDrafts);
+    saveMonthlyDrafts(updatedAllDrafts);
+
+    // 3. Transactions shift if requested
+    let movedTxsCount = 0;
+    if (includeTransactions && onBatchUpdateTransactions) {
+      const sourceTxs = transactions.filter((t) => {
+        if (t.type !== 'expense') return false;
+        const txMonth = (t.date_from || t.date_to || '').substring(0, 7);
+        if (txMonth !== sourceMonth) return false;
+
+        if (mode === 'single' && card) {
+          const matchesCardTitle = t.description?.includes(card.title);
+          const matchesSubItem = card.subItems?.some((sub) => t.description?.includes(sub.name));
+          const matchesCategory = card.category && t.category === card.category;
+          return matchesCardTitle || matchesSubItem || matchesCategory;
+        }
+        return true;
+      });
+
+      if (sourceTxs.length > 0) {
+        movedTxsCount = sourceTxs.length;
+        if (moveActionType === 'move') {
+          const updatedTxs: Transaction[] = sourceTxs.map((t) => ({
+            ...t,
+            date_from: moveDateToMonth(t.date_from, targetMonth),
+            date_to: moveDateToMonth(t.date_to, targetMonth),
+            updated_at: new Date().toISOString(),
+          }));
+          onBatchUpdateTransactions(updatedTxs);
+        } else {
+          // Copy
+          const timestamp = new Date().toISOString();
+          const clonedTxs: Transaction[] = sourceTxs.map((t, idx) => ({
+            ...t,
+            id: `tx-expcard-copy-${targetMonth.replace('-', '')}-${Date.now()}-${idx}`,
+            date_from: moveDateToMonth(t.date_from, targetMonth),
+            date_to: moveDateToMonth(t.date_to, targetMonth),
+            created_at: timestamp,
+            updated_at: timestamp,
+          }));
+          onBatchUpdateTransactions(clonedTxs);
+        }
+      }
+    }
+
+    // 4. Switch to target month and apply inputs
+    setActiveMonth(targetMonth);
+    setInputs(curTargetDraft);
+
+    // 5. Close modal
+    setMoveModalState(null);
+
+    // 6. Toast notification
+    const [targetY, targetM] = targetMonth.split('-');
+    const [srcY, srcM] = sourceMonth.split('-');
+    const targetLabel = `${targetY}年${parseInt(targetM, 10)}月度`;
+    const sourceLabel = `${srcY}年${parseInt(srcM, 10)}月度`;
+    const actionLabel = moveActionType === 'move' ? '移動' : 'コピー';
+    const targetName = mode === 'single' && card ? `「${card.title}」` : 'すべての経費データ';
+
+    showToast(
+      `🚚 ${targetName} を ${sourceLabel} から ${targetLabel} へ${actionLabel}しました！（入力品目: ${movedItemsCount}件, 出納帳取引: ${movedTxsCount}件）`
+    );
   };
 
   // Restore default salary card if missing or removed
@@ -1275,6 +1619,16 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             <span>前月 ({parseInt(prevMonthStr.split('-')[1], 10)}月) コピー</span>
           </button>
 
+          <button
+            type="button"
+            onClick={handleOpenMoveMonthModal}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
+            title="間違えて入力した経費カードや計上データを、別の月（対象月）へまとめて移動・振替します"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600" />
+            <span>他月へまとめて移動</span>
+          </button>
+
           <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold rounded-lg">
             <Sparkles className="w-3 h-3 text-emerald-600" />
             給与自動連動中
@@ -1455,6 +1809,14 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
                       {/* Card Action Menu */}
                       <div className="flex items-center gap-1 bg-black/20 backdrop-blur-xs p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMoveCardModal(card)}
+                          className="p-1 text-white/80 hover:text-white rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
+                          title="このカードの経費データを他の月に移動（またはコピー）"
+                        >
+                          <ArrowRightLeft className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleCopyPreviousMonthData(card.id)}
@@ -1735,6 +2097,16 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                         <span>計上</span>
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenMoveCardModal(card)}
+                      className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      title="このカードの経費データを他の月に移動（またはコピー）"
+                    >
+                      <ArrowRightLeft className="w-3 h-3 text-indigo-600" />
+                      <span>他月移動</span>
+                    </button>
 
                     <button
                       type="button"
@@ -2214,6 +2586,234 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
               >
                 保存する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move / Copy Month Modal */}
+      {moveModalState && moveModalState.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-indigo-700 via-indigo-800 to-slate-900 text-white flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 rounded-2xl backdrop-blur-xs border border-white/10">
+                  <ArrowRightLeft className="w-5 h-5 text-indigo-200" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight">
+                    {moveModalState.mode === 'single' && moveModalState.card
+                      ? `経費カード「${moveModalState.card.title}」の月移動`
+                      : `${activeMonth.replace('-', '年')}月度 経費カードの一括移動`}
+                  </h3>
+                  <p className="text-xs text-indigo-200/90 mt-0.5">
+                    誤って違う月に入力した金額や出納帳データを別の月にスライド移動できます
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMoveModalState(null)}
+                className="p-1.5 text-white/70 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              {/* Target item summary card */}
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
+                    移動対象データ
+                  </span>
+                  <span className="text-sm font-bold text-slate-800">
+                    {moveModalState.mode === 'single' && moveModalState.card
+                      ? moveModalState.card.title
+                      : `すべての経費カード (${expenseCards.length}枚)`}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-500 block">
+                    入力金額合計
+                  </span>
+                  <span className="text-sm font-black font-mono text-indigo-900">
+                    ¥{moveModalState.mode === 'single' && moveModalState.card
+                      ? getCardEnteredSubtotal(moveModalState.card).toLocaleString()
+                      : totalAllCardsAmount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Month Shift Selector: From -> To */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  移動元（現在） ➔ 移動先（新月度）
+                </label>
+
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 text-center">
+                    <span className="text-[10px] font-semibold text-slate-500 block">現在の月度</span>
+                    <span className="text-xs font-black text-slate-800">
+                      {activeMonth.replace('-', '年')}月度
+                    </span>
+                  </div>
+
+                  <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center">
+                    <ArrowRightLeft className="w-4 h-4" />
+                  </div>
+
+                  <div>
+                    <select
+                      value={targetMoveMonth}
+                      onChange={(e) => setTargetMoveMonth(e.target.value)}
+                      className="w-full p-2.5 bg-white border-2 border-indigo-500 rounded-xl text-xs font-black text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-400 cursor-pointer shadow-xs"
+                    >
+                      {allAvailableMonths.map((m) => (
+                        <option
+                          key={m.month}
+                          value={m.month}
+                          disabled={m.month === activeMonth}
+                        >
+                          {m.label} {m.month === activeMonth ? ' (現在選択中)' : ''} ({m.periodLabel})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Quick month selection shortcuts */}
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] text-slate-400 font-medium">クイック指定:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (prevMonthStr !== activeMonth) setTargetMoveMonth(prevMonthStr);
+                    }}
+                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-md cursor-pointer transition-colors"
+                  >
+                    ◀ 前月 ({prevMonthStr})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (nextMonthStr !== activeMonth) setTargetMoveMonth(nextMonthStr);
+                    }}
+                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold rounded-md cursor-pointer transition-colors"
+                  >
+                    翌月 ({nextMonthStr}) ▶
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Type Selection (Move vs Copy) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  移動方法（動作モード）
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                      moveActionType === 'move'
+                        ? 'border-indigo-600 bg-indigo-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="moveActionType"
+                        value="move"
+                        checked={moveActionType === 'move'}
+                        onChange={() => setMoveActionType('move')}
+                        className="text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs font-black text-slate-900">
+                        他の月へ移動（振替）
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 pl-5">
+                      入力ミス修正用。元の月の入力値はクリアされ、指定した月へ移動します。
+                    </p>
+                  </label>
+
+                  <label
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                      moveActionType === 'copy'
+                        ? 'border-indigo-600 bg-indigo-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="moveActionType"
+                        value="copy"
+                        checked={moveActionType === 'copy'}
+                        onChange={() => setMoveActionType('copy')}
+                        className="text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs font-black text-slate-900">
+                        他の月へコピー（複製）
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 pl-5">
+                      元の月のデータを残したまま、指定した月へ同じ金額を複製します。
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              {/* Transactions sync checkbox */}
+              {onBatchUpdateTransactions && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeTransactions}
+                      onChange={(e) => setIncludeTransactions(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">
+                        出納帳に計上済みの取引データも新しい月へ{moveActionType === 'move' ? '移動' : 'コピー'}する
+                      </span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        すでに「計上」ボタンを押して出納帳に記録されている取引の日付も、連動して新しい月度の日付へ変更されます。
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setMoveModalState(null)}
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold rounded-xl cursor-pointer hover:bg-slate-100"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteMove}
+                disabled={!targetMoveMonth || targetMoveMonth === activeMonth}
+                className={`px-5 py-2.5 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                  !targetMoveMonth || targetMoveMonth === activeMonth
+                    ? 'bg-slate-300 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-indigo-200'
+                }`}
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>
+                  {targetMoveMonth ? `${targetMoveMonth.split('-')[0]}年${parseInt(targetMoveMonth.split('-')[1], 10)}月度へ` : ''}
+                  {moveActionType === 'move' ? '移動する' : 'コピーする'}
+                </span>
               </button>
             </div>
           </div>

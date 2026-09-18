@@ -290,6 +290,30 @@ export default function App() {
     );
   };
 
+  // Handler: Batch Update or Delete Transactions (e.g. moving transactions to another month)
+  const handleBatchUpdateTransactions = (
+    updatedList: Transaction[],
+    deletedIds: string[] = []
+  ) => {
+    setTransactions(prev => {
+      let next = prev.filter(t => !deletedIds.includes(t.id));
+      if (updatedList.length > 0) {
+        const updatedMap = new Map(updatedList.map(t => [t.id, t]));
+        next = next.map(t => updatedMap.get(t.id) || t);
+        const currentIds = new Set(next.map(t => t.id));
+        const brandNew = updatedList.filter(t => !currentIds.has(t.id));
+        if (brandNew.length > 0) {
+          next = [...brandNew, ...next];
+        }
+      }
+      saveTransactions(next);
+      return next;
+    });
+
+    deletedIds.forEach(id => syncDeleteTransactionFromFirestore(id));
+    updatedList.forEach(tx => syncSaveTransactionToFirestore(tx));
+  };
+
   // Handler: Duplicate Transaction
   const handleDuplicateTransaction = (tx: Transaction) => {
     const timestamp = new Date().toISOString();
@@ -1245,6 +1269,7 @@ export default function App() {
             onNavigateToSalary={() => setCurrentTab('salary')}
             onEditTransaction={setEditingTransaction}
             onDeleteTransaction={handleDeleteTransaction}
+            onBatchUpdateTransactions={handleBatchUpdateTransactions}
             onSyncSalaryToExpenseCards={(targetMonth) => {
               const emps = (settings.monthlySalarySnapshots && settings.monthlySalarySnapshots[targetMonth]) || settings.salaryEmployees || [];
               const salarySettings = settings.salarySettings || {
