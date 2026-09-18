@@ -25,6 +25,7 @@ interface ExpenseMinimapBreakdownProps {
   expenseCards: ExpenseCard[];
   inputs: Record<string, { amount?: number | string; isSelected?: boolean }>;
   totalAllCardsAmount: number;
+  activeGroupFilter?: string;
   isOpen: boolean;
   onToggle: () => void;
   onEditTransaction?: (tx: Transaction) => void;
@@ -37,6 +38,7 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
   expenseCards,
   inputs,
   totalAllCardsAmount,
+  activeGroupFilter = 'ALL',
   isOpen,
   onToggle,
   onEditTransaction,
@@ -49,8 +51,20 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isConfirmingBulkClean, setIsConfirmingBulkClean] = useState<boolean>(false);
 
+  // Filter tab inside breakdown
+  const [internalFilter, setInternalFilter] = useState<string>('all');
+
+  // Keep internal filter in sync when parent changes activeGroupFilter
+  React.useEffect(() => {
+    if (activeGroupFilter && activeGroupFilter !== 'ALL') {
+      setInternalFilter(activeGroupFilter);
+    } else {
+      setInternalFilter('all');
+    }
+  }, [activeGroupFilter]);
+
   // 1. Registered expense transactions for this activeMonth
-  const activeMonthTxs = React.useMemo(() => {
+  const allActiveMonthTxs = React.useMemo(() => {
     return transactions
       .filter(
         (t) =>
@@ -59,7 +73,6 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
             (t.date_to && t.date_to.startsWith(activeMonth)))
       )
       .sort((a, b) => {
-        // Sort by date then amount desc
         const dA = a.date_from || a.date_to || '';
         const dB = b.date_from || b.date_to || '';
         if (dA !== dB) return dA.localeCompare(dB);
@@ -67,8 +80,35 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
       });
   }, [transactions, activeMonth]);
 
+  // Filtered transactions based on internalFilter
+  const activeMonthTxs = React.useMemo(() => {
+    if (internalFilter === 'all') return allActiveMonthTxs;
+
+    return allActiveMonthTxs.filter((t) => {
+      if (internalFilter === 'credit_card') {
+        const isCardMethod = t.payment_method === 'クレジットカード' || (t.payment_method && t.payment_method.includes('カード'));
+        const hasCardDesc = t.description && (t.description.includes('カード') || t.description.includes('ビジネスカード'));
+        return isCardMethod || hasCardDesc;
+      }
+      if (internalFilter === 'salary') {
+        return (
+          t.category.includes('給料') ||
+          t.category.includes('役員報酬') ||
+          t.category.includes('報酬') ||
+          t.category.includes('法定福利')
+        );
+      }
+      if (internalFilter === 'month_end') {
+        const isMonthEndMethod = t.payment_method === '口座振替' || t.payment_method === '銀行振込';
+        return isMonthEndMethod || (t.date_from && t.date_from.endsWith('-30') || t.date_from?.endsWith('-31'));
+      }
+      return true;
+    });
+  }, [allActiveMonthTxs, internalFilter]);
+
   const registeredTotal = activeMonthTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
-  const isRegistered = activeMonthTxs.length > 0;
+  const allRegisteredTotal = allActiveMonthTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const isRegistered = allActiveMonthTxs.length > 0;
 
   // Duplicate detection for this active month
   const duplicateInfo = React.useMemo(() => {
@@ -105,51 +145,62 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
 
   // 2. Planned cards list for this month (when reviewing or if un-registered)
   const plannedCardsData = React.useMemo(() => {
-    return expenseCards.map((card) => {
-      let cardSubtotal = 0;
-      const subItemsBreakdown: { name: string; category: string; amount: number }[] = [];
+    return expenseCards
+      .filter((card) => {
+        if (internalFilter === 'all') return true;
+        return card.timingGroup === internalFilter;
+      })
+      .map((card) => {
+        let cardSubtotal = 0;
+        const subItemsBreakdown: { name: string; category: string; amount: number }[] = [];
 
-      if (card.subItems && card.subItems.length > 0) {
-        card.subItems.forEach((sub) => {
-          const itemInput = inputs[`${card.id}_${sub.id}`];
+        if (card.subItems && card.subItems.length > 0) {
+          card.subItems.forEach((sub) => {
+            const itemInput = inputs[`${card.id}_${sub.id}`];
+            const isSel = itemInput?.isSelected ?? true;
+            const amt =
+              itemInput?.amount !== undefined && itemInput?.amount !== ''
+                ? Number(itemInput.amount)
+                : sub.defaultAmount || 0;
+            if (isSel && amt > 0) {
+              cardSubtotal += amt;
+              subItemsBreakdown.push({
+                name: sub.name,
+                category: sub.category || card.category || '経費',
+                amount: amt,
+              });
+            }
+          });
+        } else {
+          const itemInput = inputs[card.id];
           const isSel = itemInput?.isSelected ?? true;
           const amt =
             itemInput?.amount !== undefined && itemInput?.amount !== ''
               ? Number(itemInput.amount)
-              : sub.defaultAmount || 0;
+              : card.defaultAmount || 0;
           if (isSel && amt > 0) {
             cardSubtotal += amt;
             subItemsBreakdown.push({
-              name: sub.name,
-              category: sub.category || card.category || '経費',
+              name: card.title,
+              category: card.category || '経費',
               amount: amt,
             });
           }
-        });
-      } else {
-        const itemInput = inputs[card.id];
-        const isSel = itemInput?.isSelected ?? true;
-        const amt =
-          itemInput?.amount !== undefined && itemInput?.amount !== ''
-            ? Number(itemInput.amount)
-            : card.defaultAmount || 0;
-        if (isSel && amt > 0) {
-          cardSubtotal += amt;
-          subItemsBreakdown.push({
-            name: card.title,
-            category: card.category || '経費',
-            amount: amt,
-          });
         }
-      }
 
-      return {
-        card,
-        total: cardSubtotal,
-        subItems: subItemsBreakdown,
-      };
-    }).filter((c) => c.total > 0);
-  }, [expenseCards, inputs]);
+        return {
+          card,
+          total: cardSubtotal,
+          subItems: subItemsBreakdown,
+        };
+      })
+      .filter((c) => c.total > 0);
+  }, [expenseCards, inputs, internalFilter]);
+
+  const plannedTotal = plannedCardsData.reduce((sum, c) => sum + c.total, 0);
+  const displayTotal = internalFilter !== 'all' 
+    ? (activeMonthTxs.length > 0 ? registeredTotal : plannedTotal)
+    : (isRegistered ? allRegisteredTotal : totalAllCardsAmount);
 
   // Color helper for categories
   const getCategoryBadgeClass = (category: string) => {
@@ -204,10 +255,12 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
         <div className="flex items-center gap-3">
           <div className="text-right">
             <span className="text-[10px] text-slate-500 font-medium block">
-              {isRegistered ? '出納帳 合計' : 'カード予定 合計'}
+              {internalFilter !== 'all'
+                ? `${internalFilter === 'credit_card' ? 'カード決済' : internalFilter === 'salary' ? '給与' : '月末払'} 計`
+                : (isRegistered ? '出納帳 合計' : 'カード予定 合計')}
             </span>
             <span className="text-sm font-black font-mono text-rose-950">
-              ¥{(isRegistered ? registeredTotal : totalAllCardsAmount).toLocaleString()}
+              ¥{displayTotal.toLocaleString()}
             </span>
           </div>
 
@@ -220,15 +273,44 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
       {/* Expanded Breakdown Body */}
       {isOpen && (
         <div className="px-4 pb-4 pt-1 border-t border-slate-200/80 bg-white/60">
+          {/* Breakdown Filter Tabs */}
+          <div className="flex items-center gap-1.5 flex-wrap my-2 pb-2 border-b border-slate-200/80">
+            <span className="text-[11px] font-bold text-slate-500 mr-1">内訳の絞り込み:</span>
+            {[
+              { id: 'all', label: `すべて (${allActiveMonthTxs.length > 0 ? allActiveMonthTxs.length + '件' : expenseCards.length + '枚'})` },
+              { id: 'credit_card', label: '💳 カード決済' },
+              { id: 'salary', label: '👥 給与・役員報酬' },
+              { id: 'month_end', label: '🏢 月末払い・家賃' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setInternalFilter(tab.id)}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  internalFilter === tab.id
+                    ? 'bg-rose-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+            {internalFilter !== 'all' && (
+              <span className="ml-auto text-xs font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                {internalFilter === 'credit_card' ? 'カード決済小計' : '小計'}: ¥{displayTotal.toLocaleString()}
+              </span>
+            )}
+          </div>
+
           <p className="text-[11px] text-slate-500 mb-2.5">
-            ※ 上のミニマップで「{monthInt}月」の数字（
+            ※ 上のミニマップ「{monthInt}月」の数字（
             {isRegistered
-              ? `¥${Math.round(registeredTotal / 10000)}万`
+              ? `¥${Math.round(allRegisteredTotal / 10000)}万`
               : `予 ¥${Math.round(totalAllCardsAmount / 10000)}万`}
-            ）のもとになっている経費カード・仕訳の一覧です。
+            ）の内訳一覧です。{internalFilter === 'credit_card' && '（カード決済のみ表示中）'}
           </p>
 
-          {isRegistered ? (
+          {activeMonthTxs.length > 0 ? (
             <div className="space-y-3">
               {/* Duplicate Detection Warning Banner & 1-Click Clean */}
               {duplicateInfo.count > 0 && (
@@ -417,13 +499,13 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
                 })}
               </div>
             </div>
-          ) : (
+          ) : plannedCardsData.length > 0 ? (
             /* Unregistered Planned Cards Grid */
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50/80 px-3 py-1.5 rounded-lg border border-amber-200 mb-2">
                 <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 <span>
-                  {monthInt}月度はまだ出納帳へ計上されていません。現在の設定に基づいた予定カード一覧です。
+                  {internalFilter !== 'all' ? `${internalFilter === 'credit_card' ? 'カード決済' : '選択したグループ'}の` : `${monthInt}月度の`}予定カード内訳一覧です（出納帳にはまだ計上されていません）。
                 </span>
               </div>
 
@@ -479,6 +561,10 @@ export const ExpenseMinimapBreakdown: React.FC<ExpenseMinimapBreakdownProps> = (
                   </div>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="p-6 text-center text-xs text-slate-500 bg-slate-50/70 rounded-xl border border-slate-200">
+              該当する経費データはありません（フィルター条件に一致する仕訳・カードがありません）。
             </div>
           )}
         </div>

@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ExternalLink,
   ArrowRightLeft,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   ExpenseCard,
@@ -235,8 +236,15 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     );
   }, [selectedFilter, fiscalPeriods]);
 
-  // Active Month
+  // Active Month (persisted across reloads)
   const [activeMonth, setActiveMonth] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('scratch_keiri_expense_active_month');
+      if (saved && currentPeriod?.months?.includes(saved)) {
+        return saved;
+      }
+    } catch (e) {}
+
     if (currentPeriod?.months?.length > 0) {
       const thisMonth = new Date().toISOString().substring(0, 7);
       if (currentPeriod.months.includes(thisMonth)) return thisMonth;
@@ -245,10 +253,14 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     return '2025-08';
   });
 
-  // Keep active month in sync when period changes
+  // Keep active month in sync when period changes & persist to localStorage
   React.useEffect(() => {
     if (currentPeriod?.months?.length > 0 && !currentPeriod.months.includes(activeMonth)) {
       setActiveMonth(currentPeriod.months[0]);
+    } else if (activeMonth) {
+      try {
+        localStorage.setItem('scratch_keiri_expense_active_month', activeMonth);
+      } catch (e) {}
     }
   }, [currentPeriod, activeMonth]);
 
@@ -311,6 +323,8 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             (t.date_to && t.date_to.startsWith(targetMonth)))
       );
 
+      const usedTxIds = new Set<string>();
+
       cards.forEach((card) => {
         const defaultDate = (card.timingGroup === 'month_end' || card.id.includes('month-end'))
           ? `${targetMonth}-${new Date(Number(targetMonth.split('-')[0]), Number(targetMonth.split('-')[1]), 0).getDate()}`
@@ -321,7 +335,8 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         if (card.subItems && card.subItems.length > 0) {
           card.subItems.forEach((sub) => {
             const key = `${card.id}_${sub.id}`;
-            if (targetDraft && targetDraft[key] !== undefined) {
+            // 1. Saved draft for this month takes top priority
+            if (targetDraft && targetDraft[key] !== undefined && targetDraft[key].amount !== '') {
               initial[key] = {
                 ...targetDraft[key],
                 date: targetDraft[key].date || defaultDate,
@@ -329,13 +344,17 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               return;
             }
 
+            // 2. Specific ledger transaction matching by exact sub-item name or card title
             if (monthTxs.length > 0) {
               const matchedTx = monthTxs.find(
                 (tx) =>
-                  (tx.description && tx.description.includes(sub.name)) ||
-                  (tx.category === sub.category && (!sub.store || sub.store === '全社共通' || tx.store === sub.store))
+                  !usedTxIds.has(tx.id) &&
+                  tx.description &&
+                  (tx.description.includes(sub.name) ||
+                    (tx.description.includes(card.title) && tx.category === sub.category))
               );
               if (matchedTx) {
+                usedTxIds.add(matchedTx.id);
                 initial[key] = {
                   amount: String(matchedTx.amount || 0),
                   date: matchedTx.date_from || matchedTx.date_to || defaultDate,
@@ -346,9 +365,10 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               }
             }
 
-            const isFixedOrSalary = card.timingGroup === 'salary' || card.timingGroup === 'month_end' || sub.costType === 'fixed';
+            // 3. Fallback to default configured amount for both fixed & variable items
+            const fallbackAmount = sub.defaultAmount ? String(sub.defaultAmount) : '';
             initial[key] = {
-              amount: isFixedOrSalary && sub.defaultAmount ? String(sub.defaultAmount) : '',
+              amount: fallbackAmount,
               date: defaultDate,
               memo: sub.memo || '',
               isSelected: true,
@@ -356,7 +376,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           });
         } else {
           const key = card.id;
-          if (targetDraft && targetDraft[key] !== undefined) {
+          if (targetDraft && targetDraft[key] !== undefined && targetDraft[key].amount !== '') {
             initial[key] = {
               ...targetDraft[key],
               date: targetDraft[key].date || defaultDate,
@@ -367,10 +387,12 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           if (monthTxs.length > 0) {
             const matchedTx = monthTxs.find(
               (tx) =>
-                (tx.description && tx.description.includes(card.title)) ||
-                (card.category && tx.category === card.category)
+                !usedTxIds.has(tx.id) &&
+                ((tx.description && tx.description.includes(card.title)) ||
+                  (card.category && tx.category === card.category && (!card.paymentMethod || tx.payment_method === card.paymentMethod)))
             );
             if (matchedTx) {
+              usedTxIds.add(matchedTx.id);
               initial[key] = {
                 amount: String(matchedTx.amount || 0),
                 date: matchedTx.date_from || matchedTx.date_to || defaultDate,
@@ -381,9 +403,9 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
             }
           }
 
-          const isFixedOrSalary = card.timingGroup === 'salary' || card.timingGroup === 'month_end' || card.costType === 'fixed';
+          const fallbackAmount = card.defaultAmount ? String(card.defaultAmount) : '';
           initial[key] = {
-            amount: isFixedOrSalary && card.defaultAmount ? String(card.defaultAmount) : '',
+            amount: fallbackAmount,
             date: defaultDate,
             memo: card.memo || '',
             isSelected: true,
@@ -895,21 +917,45 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
     targetKeys.forEach((key) => {
       const item = inputs[key] || curSourceDraft[key];
-      if (item && item.amount !== undefined && item.amount !== '' && Number(item.amount) > 0) {
-        const amtNum = Number(item.amount) || 0;
+      let defAmt = 0;
+      let cardObj: ExpenseCard | undefined;
+      let subObj: ExpenseCardSubItem | undefined;
+      if (key.includes('_')) {
+        const [cId, sId] = key.split('_');
+        cardObj = expenseCards.find((c) => c.id === cId);
+        subObj = cardObj?.subItems?.find((s) => s.id === sId);
+        defAmt = subObj?.defaultAmount || 0;
+      } else {
+        cardObj = expenseCards.find((c) => c.id === key);
+        defAmt = cardObj?.defaultAmount || 0;
+      }
+
+      const effectiveAmtStr =
+        item && item.amount !== undefined && item.amount !== ''
+          ? String(item.amount)
+          : defAmt > 0
+          ? String(defAmt)
+          : '';
+
+      if (effectiveAmtStr !== '' && Number(effectiveAmtStr) > 0) {
+        const amtNum = Number(effectiveAmtStr) || 0;
         movedTotalAmount += amtNum;
         movedItemsCount++;
 
-        const newDate = moveDateToMonth(item.date, targetMonth);
+        const newDate = moveDateToMonth(item?.date || `${sourceMonth}-25`, targetMonth);
         curTargetDraft[key] = {
-          ...item,
+          amount: effectiveAmtStr,
           date: newDate,
+          memo: item?.memo || subObj?.memo || cardObj?.memo || '',
+          isSelected: item?.isSelected ?? true,
         };
 
         if (moveActionType === 'move') {
           curSourceDraft[key] = {
-            ...item,
             amount: '',
+            date: item?.date || `${sourceMonth}-25`,
+            memo: item?.memo || '',
+            isSelected: item?.isSelected ?? true,
           };
         }
       }
@@ -935,7 +981,10 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
           const matchesCardTitle = t.description?.includes(card.title);
           const matchesSubItem = card.subItems?.some((sub) => t.description?.includes(sub.name));
           const matchesCategory = card.category && t.category === card.category;
-          return matchesCardTitle || matchesSubItem || matchesCategory;
+          const matchesPaymentMethod =
+            (card.paymentMethod && t.payment_method === card.paymentMethod) ||
+            (card.timingGroup === 'credit_card' && t.payment_method === 'クレジットカード');
+          return matchesCardTitle || matchesSubItem || matchesCategory || matchesPaymentMethod;
         }
         return true;
       });
@@ -984,6 +1033,76 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     showToast(
       `🚚 ${targetName} を ${sourceLabel} から ${targetLabel} へ${actionLabel}しました！（入力品目: ${movedItemsCount}件, 出納帳取引: ${movedTxsCount}件）`
     );
+  };
+
+  // Sync credit card sub-items with actual credit card transactions in ledger
+  const handleSyncCardWithLedgerTxs = (card: ExpenseCard) => {
+    const cardTxs = transactions.filter(
+      (t) =>
+        t.type === 'expense' &&
+        ((t.date_from && t.date_from.startsWith(activeMonth)) ||
+          (t.date_to && t.date_to.startsWith(activeMonth))) &&
+        (t.payment_method === 'クレジットカード' ||
+          (card.paymentMethod && t.payment_method === card.paymentMethod) ||
+          t.description?.includes(card.title))
+    );
+
+    if (cardTxs.length === 0) {
+      alert(`出納帳の${activeMonth}月度には、クレジットカード決済の取引データがまだ登録されていません。`);
+      return;
+    }
+
+    const newSubItems: ExpenseCardSubItem[] = cardTxs.map((tx, idx) => {
+      let cleanName = tx.description ? tx.description.replace(new RegExp(`^${card.title}\\s*-\\s*`), '') : '';
+      if (!cleanName) cleanName = tx.category || `カード決済明細 ${idx + 1}`;
+      return {
+        id: `tx-sub-${tx.id}`,
+        name: cleanName,
+        category: tx.category || '消耗品費',
+        costType: 'variable' as const,
+        defaultAmount: tx.amount || 0,
+        store: tx.store || '全社共通',
+        memo: tx.memo || (tx.payment_method ? `カード: ${tx.payment_method}` : ''),
+      };
+    });
+
+    const updatedCards = expenseCards.map((c) => {
+      if (c.id === card.id) {
+        return {
+          ...c,
+          subItems: newSubItems,
+        };
+      }
+      return c;
+    });
+    onSaveExpenseCards(updatedCards);
+
+    const updatedInputs = { ...inputs };
+    const curMonthDraft = { ...(monthlyDrafts[activeMonth] || {}) };
+
+    newSubItems.forEach((sub, idx) => {
+      const tx = cardTxs[idx];
+      const key = `${card.id}_${sub.id}`;
+      const entry = {
+        amount: String(tx.amount || 0),
+        date: tx.date_from || tx.date_to || `${activeMonth}-25`,
+        memo: tx.memo || '',
+        isSelected: true,
+      };
+      updatedInputs[key] = entry;
+      curMonthDraft[key] = entry;
+    });
+
+    setInputs(updatedInputs);
+    const updatedDrafts = {
+      ...monthlyDrafts,
+      [activeMonth]: curMonthDraft,
+    };
+    setMonthlyDrafts(updatedDrafts);
+    saveMonthlyDrafts(updatedDrafts);
+
+    const totalAmt = cardTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+    showToast(`✅ 出納帳のカード決済明細（${cardTxs.length}件、計 ¥${totalAmt.toLocaleString()}）を取り込み、内訳と金額を完全同期しました！`);
   };
 
   // Restore default salary card if missing or removed
@@ -1596,6 +1715,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
         expenseCards={expenseCards}
         inputs={inputs}
         totalAllCardsAmount={totalAllCardsAmount}
+        activeGroupFilter={activeGroupFilter}
         isOpen={showMinimapBreakdown}
         onToggle={() => setShowMinimapBreakdown(!showMinimapBreakdown)}
         onEditTransaction={onEditTransaction}
@@ -1885,6 +2005,73 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
 
                   {/* Card Body: Purchased Sub-Items (何を買ったか) */}
                   <div className="p-4 space-y-3">
+                    {/* Credit Card Ledger Reconciliation Banner */}
+                    {(() => {
+                      const isCardGroup = card.timingGroup === 'credit_card' || card.paymentMethod === 'クレジットカード';
+                      if (!isCardGroup) return null;
+
+                      const cardTxs = transactions.filter(
+                        (t) =>
+                          t.type === 'expense' &&
+                          ((t.date_from && t.date_from.startsWith(activeMonth)) ||
+                            (t.date_to && t.date_to.startsWith(activeMonth))) &&
+                          (t.payment_method === 'クレジットカード' ||
+                            (card.paymentMethod && t.payment_method === card.paymentMethod) ||
+                            t.description?.includes(card.title))
+                      );
+                      const cardTxsTotal = cardTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+                      if (cardTxs.length === 0) return null;
+
+                      const isDiff = cardTxsTotal !== cardSubtotal;
+
+                      return (
+                        <div
+                          className={`p-2.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs ${
+                            !isDiff
+                              ? 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+                              : 'bg-amber-50/90 border-amber-300 text-amber-950'
+                          }`}
+                        >
+                          <div className="flex items-start sm:items-center gap-1.5 min-w-0">
+                            {!isDiff ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                            )}
+                            <div className="leading-tight">
+                              <span className="font-bold block">
+                                出納帳のカード明細: {cardTxs.length}件 / 計 ¥{cardTxsTotal.toLocaleString()}
+                              </span>
+                              {isDiff ? (
+                                <span className="text-[11px] text-amber-700 font-medium block">
+                                  内訳小計（¥{cardSubtotal.toLocaleString()}）と ¥{Math.abs(cardTxsTotal - cardSubtotal).toLocaleString()} の差額があります
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-emerald-700 font-medium block">
+                                  出納帳とカード内訳の合計が100%一致しています
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSyncCardWithLedgerTxs(card)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer shadow-2xs flex items-center justify-center gap-1 ${
+                              isDiff
+                                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
+                            }`}
+                            title="出納帳のクレジットカード取引をこのカードの内訳品目に同期"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                            <span>{isDiff ? '明細を取り込んで一致させる' : '出納帳から再同期'}</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
+
                     {hasSubItems ? (
                       card.subItems!.map((sub) => {
                         const key = `${card.id}_${sub.id}`;
@@ -2155,6 +2342,73 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {/* Credit Card Ledger Reconciliation Banner (List View) */}
+                {(() => {
+                  const isCardGroup = card.timingGroup === 'credit_card' || card.paymentMethod === 'クレジットカード';
+                  if (!isCardGroup) return null;
+
+                  const cardTxs = transactions.filter(
+                    (t) =>
+                      t.type === 'expense' &&
+                      ((t.date_from && t.date_from.startsWith(activeMonth)) ||
+                        (t.date_to && t.date_to.startsWith(activeMonth))) &&
+                      (t.payment_method === 'クレジットカード' ||
+                        (card.paymentMethod && t.payment_method === card.paymentMethod) ||
+                        t.description?.includes(card.title))
+                  );
+                  const cardTxsTotal = cardTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+
+                  if (cardTxs.length === 0) return null;
+
+                  const isDiff = cardTxsTotal !== cardSubtotal;
+
+                  return (
+                    <div
+                      className={`mx-4 mt-3 p-2.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs ${
+                        !isDiff
+                          ? 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+                          : 'bg-amber-50/90 border-amber-300 text-amber-950'
+                      }`}
+                    >
+                      <div className="flex items-start sm:items-center gap-1.5 min-w-0">
+                        {!isDiff ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+                        )}
+                        <div className="leading-tight">
+                          <span className="font-bold block">
+                            出納帳のカード明細: {cardTxs.length}件 / 計 ¥{cardTxsTotal.toLocaleString()}
+                          </span>
+                          {isDiff ? (
+                            <span className="text-[11px] text-amber-700 font-medium block">
+                              内訳小計（¥{cardSubtotal.toLocaleString()}）と ¥{Math.abs(cardTxsTotal - cardSubtotal).toLocaleString()} の差額があります
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-emerald-700 font-medium block">
+                              出納帳とカード内訳の合計が100%一致しています
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSyncCardWithLedgerTxs(card)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer shadow-2xs flex items-center justify-center gap-1 ${
+                          isDiff
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                            : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
+                        }`}
+                        title="出納帳のクレジットカード取引をこのカードの内訳品目に同期"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5" />
+                        <span>{isDiff ? '明細を取り込んで一致させる' : '出納帳から再同期'}</span>
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Sub items rows */}
                 <div className="divide-y divide-slate-100">
