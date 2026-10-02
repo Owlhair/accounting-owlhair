@@ -170,8 +170,9 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
 ];
 
 export const DEFAULT_FISCAL_SETTINGS = {
-  fiscalYearEndMonth: 3, // デフォルト: 3月決算 (4月1日〜翌年3月31日)
-  fiscalYearStartYear: 2024, // 設立・第1期: 2024年4月スタート
+  fiscalYearEndMonth: 4, // 4月決算 (毎年5月1日〜翌年4月30日)
+  fiscalYearStartYear: 2007, // 設立・第1期: 2007年5月スタート
+  fiscalYearStartMonth: 5, // 第1期開始月: 5月
 };
 
 export const SAMPLE_TRANSACTIONS: Transaction[] = [
@@ -449,8 +450,11 @@ export const loadSettings = (): AppSettings => {
       monthlySalarySnapshots: parsed.monthlySalarySnapshots || {},
       salarySettings: parsed.salarySettings || DEFAULT_SALARY_SETTINGS,
       fiscalSettings: {
-        fiscalYearEndMonth: parsed.fiscalSettings?.fiscalYearEndMonth ?? DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
-        fiscalYearStartYear: parsed.fiscalSettings?.fiscalYearStartYear ?? DEFAULT_FISCAL_SETTINGS.fiscalYearStartYear,
+        fiscalYearEndMonth: Number(parsed.fiscalSettings?.fiscalYearEndMonth) || DEFAULT_FISCAL_SETTINGS.fiscalYearEndMonth,
+        fiscalYearStartYear: (Number(parsed.fiscalSettings?.fiscalYearStartYear) === 2024 || !parsed.fiscalSettings?.fiscalYearStartYear)
+          ? 2007
+          : Number(parsed.fiscalSettings.fiscalYearStartYear),
+        fiscalYearStartMonth: Number(parsed.fiscalSettings?.fiscalYearStartMonth) || DEFAULT_FISCAL_SETTINGS.fiscalYearStartMonth,
       },
     };
   } catch (err) {

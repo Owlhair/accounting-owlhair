@@ -56,19 +56,31 @@ export const StoreSalesCardBoard: React.FC<StoreSalesCardBoardProps> = ({
   // Current active fiscal period
   const currentPeriod = useMemo(() => {
     if (selectedFilter.startsWith('period-')) {
-      return fiscalPeriods.find(p => p.key === selectedFilter) || fiscalPeriods[0];
+      const match = fiscalPeriods.find(p => p.key === selectedFilter);
+      if (match) return match;
     }
-    return fiscalPeriods[0] || {
+    if (selectedFilter.includes('-') && selectedFilter.length === 7) {
+      const match = fiscalPeriods.find(p => p.months?.includes(selectedFilter));
+      if (match) return match;
+    }
+    // Find period that contains the most sales transactions
+    const periodWithTx = fiscalPeriods.slice().sort((a, b) => {
+      const aCount = transactions.filter(t => t.type === 'sales' && a.months?.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+      const bCount = transactions.filter(t => t.type === 'sales' && b.months?.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+      return bCount - aCount;
+    })[0];
+
+    return periodWithTx || fiscalPeriods[0] || {
       periodNumber: 1,
-      label: '第1期',
+      label: `第1期 (${settings.fiscalSettings?.fiscalYearStartYear || 2007}/${String(settings.fiscalSettings?.fiscalYearStartMonth || 5).padStart(2, '0')}〜)`,
       key: 'period-1',
-      startDate: '2024-04-01',
-      endDate: '2025-03-31',
-      startMonth: '2024-04',
-      endMonth: '2025-03',
-      months: ['2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03'],
+      startDate: `${settings.fiscalSettings?.fiscalYearStartYear || 2007}-05-01`,
+      endDate: `${(settings.fiscalSettings?.fiscalYearStartYear || 2007) + 1}-04-30`,
+      startMonth: `${settings.fiscalSettings?.fiscalYearStartYear || 2007}-05`,
+      endMonth: `${(settings.fiscalSettings?.fiscalYearStartYear || 2007) + 1}-04`,
+      months: ['2025-05', '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04'],
     };
-  }, [fiscalPeriods, selectedFilter]);
+  }, [fiscalPeriods, selectedFilter, transactions, settings.fiscalSettings]);
 
   // Selected Month within current period
   const [activeMonth, setActiveMonth] = useState<string>(() => {

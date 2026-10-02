@@ -27,11 +27,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveCategories,
 }) => {
   const [activeTab, setActiveTab] = useState<'fiscal' | 'stores' | 'categories'>('fiscal');
-  const [endMonth, setEndMonth] = useState<number>(fiscalSettings?.fiscalYearEndMonth || 3);
-  const [startYear, setStartYear] = useState<number>(fiscalSettings?.fiscalYearStartYear || 2024);
-  const [storeList, setStoreList] = useState<string[]>(stores && stores.length > 0 ? stores : ['本店', '2号店', '全社共通']);
-  const [closedStoreList, setClosedStoreList] = useState<string[]>(closedStores || []);
+  const [startYear, setStartYear] = useState<number>(() => fiscalSettings?.fiscalYearStartYear || 2007);
+  const [startYearInput, setStartYearInput] = useState<string>(() => String(fiscalSettings?.fiscalYearStartYear || 2007));
+  const [startMonth, setStartMonth] = useState<number>(() => fiscalSettings?.fiscalYearStartMonth || 5);
+  const [endMonth, setEndMonth] = useState<number>(() => fiscalSettings?.fiscalYearEndMonth || 4);
+  const [storeList, setStoreList] = useState<string[]>(() => stores && stores.length > 0 ? stores : ['太宰府店', '本店', '2号店', '全社共通']);
+  const [closedStoreList, setClosedStoreList] = useState<string[]>(() => closedStores || []);
   const [newStoreInput, setNewStoreInput] = useState('');
+
+  // Sync state ONLY when modal is opened (avoids wiping user edits during background re-renders)
+  React.useEffect(() => {
+    if (isOpen) {
+      const year = Number(fiscalSettings?.fiscalYearStartYear) || 2007;
+      setStartYear(year);
+      setStartYearInput(String(year));
+      setStartMonth(Number(fiscalSettings?.fiscalYearStartMonth) || 5);
+      setEndMonth(Number(fiscalSettings?.fiscalYearEndMonth) || 4);
+      if (stores && stores.length > 0) setStoreList(stores);
+      setClosedStoreList(closedStores || []);
+      if (expenseCategories && expenseCategories.length > 0) setExpenseCatList(expenseCategories);
+      if (salesCategories && salesCategories.length > 0) setSalesCatList(salesCategories);
+    }
+  }, [isOpen]);
 
   // Categories state
   const [expenseCatList, setExpenseCatList] = useState<string[]>(expenseCategories && expenseCategories.length > 0 ? expenseCategories : ['仕入', '消耗品費', '修繕費', '通信費', '水道光熱費', '地代家賃']);
@@ -41,7 +58,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const startMonth = (endMonth % 12) + 1;
+  const handleStartYearChange = (valStr: string) => {
+    setStartYearInput(valStr);
+    const parsed = parseInt(valStr, 10);
+    if (!isNaN(parsed) && parsed >= 1970 && parsed <= 2050) {
+      setStartYear(parsed);
+    }
+  };
+
+  const handleStartMonthSelect = (m: number) => {
+    setStartMonth(m);
+    // Automatically set default endMonth to previous month (full 12 month cycle)
+    const defaultEnd = m === 1 ? 12 : m - 1;
+    setEndMonth(defaultEnd);
+  };
+
+  const handleEndMonthSelect = (m: number) => {
+    setEndMonth(m);
+  };
+
+  const handleSetPreset2007May = () => {
+    setStartYear(2007);
+    setStartYearInput('2007');
+    setStartMonth(5);
+    setEndMonth(4);
+  };
 
   const handleAddStore = () => {
     const trimmed = newStoreInput.trim();
@@ -107,10 +148,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalYear = parseInt(startYearInput, 10) || startYear || 2007;
     onSaveSettings(
       {
+        fiscalYearStartYear: finalYear,
+        fiscalYearStartMonth: Number(startMonth),
         fiscalYearEndMonth: Number(endMonth),
-        fiscalYearStartYear: Number(startYear),
       },
       storeList,
       closedStoreList
@@ -118,6 +161,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (onSaveCategories) {
       onSaveCategories(expenseCatList, salesCatList);
     }
+    alert(`✅ 決算期の設定を更新しました！\n・第1期: ${finalYear}年${startMonth}月スタート\n・決算月: ${endMonth}月\n自動で全期間の「期」を再計算し、現在の取引データへ反映しました。`);
     onClose();
   };
 
@@ -187,53 +231,144 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="p-5 space-y-4 overflow-y-auto flex-1">
             {activeTab === 'fiscal' ? (
               <>
-                {/* End Month Selection */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-gray-800">
-                    決算月（締め月）
+                {/* Quick preset banner */}
+                <div className="flex items-center justify-between p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl gap-2">
+                  <div className="text-[11px] text-indigo-950 font-bold leading-tight">
+                    👑 第1期 2007年5月スタート（4月決算）
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSetPreset2007May}
+                    className="px-2.5 py-1 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-2xs shrink-0 cursor-pointer"
+                  >
+                    設定にワンクリック適用
+                  </button>
+                </div>
+
+                {/* First Period Start Year & Start Month */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-gray-800 flex items-center gap-1">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                    第1期の開始年月（設立年・創業月）
                   </label>
+                  
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        pattern="[0-9]*"
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="2007"
+                        value={startYearInput}
+                        onChange={(e) => handleStartYearChange(e.target.value)}
+                        className="w-24 px-3 py-1.5 text-xs font-bold font-mono bg-gray-50 border border-gray-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
+                      <span className="text-xs font-bold text-gray-700">年</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[11px]">
+                      <span className="text-gray-400">よく使う年:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleStartYearChange('2007')}
+                        className={`px-2 py-0.5 rounded-lg font-bold border transition-colors cursor-pointer ${
+                          startYear === 2007
+                            ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                            : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                        }`}
+                      >
+                        2007年 (設立年)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStartYearChange('2024')}
+                        className={`px-2 py-0.5 rounded-lg font-bold border transition-colors cursor-pointer ${
+                          startYear === 2024
+                            ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                            : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                        }`}
+                      >
+                        2024年
+                      </button>
+                    </div>
+
+                    <span className="text-xs font-bold text-indigo-600 ml-auto">
+                      【第1期開始: {startYear}年{startMonth}月】
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-gray-500 font-bold">第1期の開始月を選択:</span>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
+                        <button
+                          type="button"
+                          key={`start-${m}`}
+                          onClick={() => handleStartMonthSelect(m)}
+                          className={`py-1.5 px-1 rounded-xl text-xs font-bold transition-all flex items-center justify-center border cursor-pointer ${
+                            startMonth === m
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          {m}月開始
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* End Month Selection */}
+                <div className="space-y-1.5 pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-gray-800">
+                      決算月（締め月）
+                    </label>
+                    <span className="text-[11px] text-gray-500">
+                      ※通常は開始月の前月（{startMonth === 1 ? 12 : startMonth - 1}月）
+                    </span>
+                  </div>
                   <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                       <button
                         type="button"
-                        key={m}
-                        onClick={() => setEndMonth(m)}
-                        className={`py-2 px-1 rounded-xl text-xs font-bold transition-all flex items-center justify-center border ${
+                        key={`end-${m}`}
+                        onClick={() => handleEndMonthSelect(m)}
+                        className={`py-1.5 px-1 rounded-xl text-xs font-bold transition-all flex items-center justify-center border cursor-pointer ${
                           endMonth === m
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
                             : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                         }`}
                       >
-                        {m}月
+                        {m}月決算
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* First Period Start Year */}
-                <div className="space-y-1.5 pt-1">
-                  <label className="block text-xs font-bold text-gray-800 flex items-center gap-1">
-                    <Building2 className="w-3.5 h-3.5 text-gray-500" />
-                    第1期開始年（設立年）
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="2000"
-                      max="2035"
-                      value={startYear}
-                      onChange={(e) => setStartYear(Number(e.target.value))}
-                      className="w-28 px-3 py-1.5 text-xs font-bold font-mono bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                    />
-                    <span className="text-xs font-bold text-gray-700">年スタート</span>
-                  </div>
-                </div>
-
                 {/* Compact Preview Box */}
-                <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 text-xs text-indigo-950 font-medium space-y-1">
-                  <div className="font-bold text-indigo-900">プレビュー:</div>
-                  <div>・事業年度: 毎年 {startMonth}月1日 〜 {endMonth}月末日</div>
-                  <div>・第1期: {startYear}年{startMonth}月 〜 {startMonth <= endMonth ? startYear : startYear + 1}年{endMonth}月</div>
+                <div className="bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-150 text-xs text-indigo-950 font-medium space-y-1.5">
+                  <div className="font-bold text-indigo-900 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    設定プレビュー:
+                  </div>
+                  <div className="text-[11px] space-y-1">
+                    <div>・<span className="font-bold">事業年度:</span> 毎年 {startMonth}月1日 〜 翌年 {endMonth}月末日</div>
+                    <div>・<span className="font-bold">第1期:</span> {startYear}年{startMonth}月 〜 {startMonth <= endMonth ? startYear : startYear + 1}年{endMonth}月</div>
+                    {(() => {
+                      const cur2025PeriodNum = 2025 - startYear + (startMonth <= 5 ? 1 : 0);
+                      const cur2026PeriodNum = cur2025PeriodNum + 1;
+                      return (
+                        <div className="text-emerald-800 font-bold bg-emerald-50/80 p-2 rounded-lg border border-emerald-200 mt-1 space-y-0.5">
+                          <div>✨ 【現在の期】第{cur2025PeriodNum}期 (2025/{String(startMonth).padStart(2, '0')}〜2026/{String(endMonth).padStart(2, '0')})</div>
+                          <div className="text-[10px] text-emerald-700 font-normal">
+                            ※2007年5月スタートの場合、2025年度は「第19期」、2026年度は「第20期」として自動集計されます。
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </>
             ) : activeTab === 'stores' ? (

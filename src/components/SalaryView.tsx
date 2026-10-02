@@ -96,6 +96,7 @@ interface SalaryViewProps {
   fiscalPeriods: FiscalPeriod[];
   selectedFilter: string;
   onSelectFilter: (filter: string) => void;
+  onOpenFiscalSettings?: () => void;
   onSaveSalaryEmployees: (employees: SalaryEmployee[], targetMonth?: string) => void;
   onSaveSalarySettings: (settings: SalarySettings) => void;
   onRegisterSalaryToTransactions: (payload: {
@@ -116,6 +117,7 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   fiscalPeriods,
   selectedFilter,
   onSelectFilter,
+  onOpenFiscalSettings,
   onSaveSalaryEmployees,
   onSaveSalarySettings,
   onRegisterSalaryToTransactions,
@@ -124,16 +126,20 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
   onDeleteTransaction,
 }) => {
   // Fallback period if fiscalPeriods is empty or uninitialized
-  const defaultPeriod: FiscalPeriod = useMemo(() => ({
-    periodNumber: 1,
-    label: '第1期',
-    key: 'period-1',
-    startDate: '2024-04-01',
-    endDate: '2025-03-31',
-    startMonth: '2024-04',
-    endMonth: '2025-03',
-    months: ['2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03'],
-  }), []);
+  const defaultPeriod: FiscalPeriod = useMemo(() => {
+    const sYear = settings.fiscalSettings?.fiscalYearStartYear || 2007;
+    const sMonth = settings.fiscalSettings?.fiscalYearStartMonth || 5;
+    return {
+      periodNumber: 1,
+      label: `第1期 (${sYear}/${String(sMonth).padStart(2, '0')}〜)`,
+      key: 'period-1',
+      startDate: `${sYear}-05-01`,
+      endDate: `${sYear + 1}-04-30`,
+      startMonth: `${sYear}-05`,
+      endMonth: `${sYear + 1}-04`,
+      months: ['2025-05', '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04'],
+    };
+  }, [settings.fiscalSettings]);
 
   // Current active fiscal period (matches StoreSalesCardBoard & ExpenseCardsView)
   const currentPeriod: FiscalPeriod = useMemo(() => {
@@ -644,13 +650,28 @@ export const SalaryView: React.FC<SalaryViewProps> = ({
               onChange={(e) => handlePeriodSelect(e.target.value)}
               className="text-xs font-bold bg-transparent text-gray-800 focus:outline-hidden pr-2 py-1 cursor-pointer"
             >
-              {(fiscalPeriods || []).map(p => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
+              {(fiscalPeriods || []).map(p => {
+                const count = transactions.filter(t => (p.months || []).includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+                return (
+                  <option key={p.key} value={p.key}>
+                    {p.label} {count > 0 ? `(${count}件)` : '(0件)'}
+                  </option>
+                );
+              })}
             </select>
           </div>
+
+          {onOpenFiscalSettings && (
+            <button
+              type="button"
+              onClick={onOpenFiscalSettings}
+              className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-gray-100 bg-white border border-gray-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="決算期・決算月の設定"
+            >
+              <Settings className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">決算期設定</span>
+            </button>
+          )}
 
           {/* SubView Switcher (Cards vs Table) */}
           <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1">

@@ -42,8 +42,10 @@ export const calculateFiscalPeriods = (
   transactions: Transaction[],
   settings: FiscalSettings
 ): FiscalPeriod[] => {
-  const { fiscalYearEndMonth, fiscalYearStartYear } = settings || { fiscalYearEndMonth: 3, fiscalYearStartYear: 2024 };
-  const startMonthNum = (fiscalYearEndMonth % 12) + 1; // e.g., if endMonth=3 -> startMonth=4
+  const fiscalYearStartYear = Number(settings?.fiscalYearStartYear) || 2007;
+  const fiscalYearStartMonth = Number(settings?.fiscalYearStartMonth) || (settings?.fiscalYearEndMonth ? ((settings.fiscalYearEndMonth % 12) + 1) : 5);
+  const fiscalYearEndMonth = Number(settings?.fiscalYearEndMonth) || (fiscalYearStartMonth === 1 ? 12 : fiscalYearStartMonth - 1);
+  const startMonthNum = fiscalYearStartMonth;
 
   // Determine latest year among actual transactions
   let maxYearInTx = fiscalYearStartYear;
@@ -58,7 +60,7 @@ export const calculateFiscalPeriods = (
   });
 
   // Calculate periods only up to the latest transaction year (or at most current year)
-  const currentCalYear = 2025;
+  const currentCalYear = typeof window !== 'undefined' ? new Date().getFullYear() : 2026;
   const targetMaxYear = Math.max(maxYearInTx, currentCalYear);
   const totalPeriodsToGenerate = Math.max(1, targetMaxYear - fiscalYearStartYear + 1);
 

@@ -1107,7 +1107,8 @@ export default function App() {
   const handleSaveSettings = (newFiscalSettings: FiscalSettings, newStores: string[], newClosedStores: string[] = []) => {
     const isFiscalChanged =
       newFiscalSettings.fiscalYearEndMonth !== settings.fiscalSettings.fiscalYearEndMonth ||
-      newFiscalSettings.fiscalYearStartYear !== settings.fiscalSettings.fiscalYearStartYear;
+      newFiscalSettings.fiscalYearStartYear !== settings.fiscalSettings.fiscalYearStartYear ||
+      newFiscalSettings.fiscalYearStartMonth !== settings.fiscalSettings.fiscalYearStartMonth;
 
     const updatedSettings: AppSettings = {
       ...settings,
@@ -1125,17 +1126,20 @@ export default function App() {
       return;
     }
 
-    // If fiscal year settings DID change, only change selectedFilter if the current filter is no longer valid
+    // When fiscal year settings change, re-calculate periods and switch to the period containing active transactions
     const newPeriods = calculateFiscalPeriods(transactions, newFiscalSettings);
-    const isCurrentPeriodStillValid = newPeriods.some(p => p.key === selectedFilter);
-    const isSingleMonth = availableMonths.includes(selectedFilter);
-    const isAll = selectedFilter === 'ALL';
+    if (newPeriods.length > 0) {
+      // Find period that contains the most transactions
+      const periodWithMostTx = newPeriods.slice().sort((a, b) => {
+        const aCount = transactions.filter(t => a.months.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+        const bCount = transactions.filter(t => b.months.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+        return bCount - aCount;
+      })[0];
 
-    if (!isCurrentPeriodStillValid && !isSingleMonth && !isAll) {
-      if (newPeriods.length > 0) {
-        setSelectedFilter(newPeriods[0].key);
+      if (periodWithMostTx) {
+        setSelectedFilter(periodWithMostTx.key);
       } else {
-        setSelectedFilter('ALL');
+        setSelectedFilter(newPeriods[0].key);
       }
     }
   };
@@ -1189,6 +1193,7 @@ export default function App() {
         fiscalSettings: {
           fiscalYearEndMonth: restoredSettings.fiscalSettings?.fiscalYearEndMonth ?? settings.fiscalSettings.fiscalYearEndMonth,
           fiscalYearStartYear: restoredSettings.fiscalSettings?.fiscalYearStartYear ?? settings.fiscalSettings.fiscalYearStartYear,
+          fiscalYearStartMonth: restoredSettings.fiscalSettings?.fiscalYearStartMonth ?? settings.fiscalSettings.fiscalYearStartMonth,
         },
       };
       setSettings(mergedSettings);
@@ -1317,6 +1322,7 @@ export default function App() {
             fiscalPeriods={fiscalPeriods}
             selectedFilter={selectedFilter}
             onSelectFilter={setSelectedFilter}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
             onRegisterExpenseBatch={handleRegisterExpenseBatch}
             onSaveExpenseCards={handleSaveExpenseCards}
             onNavigateToSalary={() => setCurrentTab('salary')}
@@ -1366,6 +1372,7 @@ export default function App() {
               fiscalPeriods={fiscalPeriods}
               selectedFilter={selectedFilter}
               onSelectFilter={setSelectedFilter}
+              onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
               onSaveSalaryEmployees={handleSaveSalaryEmployees}
               onSaveSalarySettings={handleSaveSalarySettings}
               onRegisterSalaryToTransactions={handleRegisterSalaryToTransactions}
@@ -1433,6 +1440,7 @@ export default function App() {
             selectedFilter={selectedFilter}
             onSelectFilter={setSelectedFilter}
             onOpenAddExpense={() => setIsAddExpenseOpen(true)}
+            onOpenFiscalSettings={() => setIsFiscalSettingsOpen(true)}
           />
         )}
       </main>

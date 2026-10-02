@@ -24,7 +24,8 @@ import {
   Coins,
   Percent,
   Receipt,
-  Info
+  Info,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface FinancialStatementViewProps {
@@ -33,6 +34,7 @@ interface FinancialStatementViewProps {
   selectedFilter: string;
   onSelectFilter: (filterId: string) => void;
   onOpenAddExpense: () => void;
+  onOpenFiscalSettings?: () => void;
 }
 
 export const FinancialStatementView: React.FC<FinancialStatementViewProps> = ({
@@ -41,6 +43,7 @@ export const FinancialStatementView: React.FC<FinancialStatementViewProps> = ({
   selectedFilter,
   onSelectFilter,
   onOpenAddExpense,
+  onOpenFiscalSettings,
 }) => {
   const [params, setParams] = useState<TaxForecastParams>(DEFAULT_TAX_PARAMS);
   const [simulatedExtraExpense, setSimulatedExtraExpense] = useState<number>(0);
@@ -135,6 +138,18 @@ export const FinancialStatementView: React.FC<FinancialStatementViewProps> = ({
               ))}
             </select>
           </div>
+
+          {onOpenFiscalSettings && (
+            <button
+              type="button"
+              onClick={onOpenFiscalSettings}
+              className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 bg-white border border-slate-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="決算期・決算月の設定"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">決算期設定</span>
+            </button>
+          )}
 
           {/* Entity Type Toggle */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">

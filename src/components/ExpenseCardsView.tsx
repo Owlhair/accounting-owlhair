@@ -30,6 +30,7 @@ import {
   ExternalLink,
   ArrowRightLeft,
   AlertTriangle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   ExpenseCard,
@@ -92,6 +93,7 @@ interface ExpenseCardsViewProps {
   fiscalPeriods: FiscalPeriod[];
   selectedFilter: string;
   onSelectFilter: (filterId: string) => void;
+  onOpenFiscalSettings?: () => void;
   onRegisterExpenseBatch: (items: BatchExpenseItem[]) => void;
   onSaveExpenseCards: (cards: ExpenseCard[]) => void;
   onNavigateToSalary?: () => void;
@@ -173,6 +175,7 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   fiscalPeriods,
   selectedFilter,
   onSelectFilter,
+  onOpenFiscalSettings,
   onRegisterExpenseBatch,
   onSaveExpenseCards,
   onNavigateToSalary,
@@ -221,24 +224,34 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
   }, [settings.expenseCards, settings.salarySettings]);
   const closedStores = settings.closedStores || [];
 
-  // Active Fiscal Period
+  // Active Fiscal Period (dynamically derived from settings and transactions, never hardcoded to 2024)
   const currentPeriod = useMemo(() => {
     if (selectedFilter.startsWith('period-')) {
-      return fiscalPeriods.find((p) => p.key === selectedFilter) || fiscalPeriods[0];
+      const match = fiscalPeriods.find((p) => p.key === selectedFilter);
+      if (match) return match;
     }
-    return (
-      fiscalPeriods[0] || {
-        periodNumber: 1,
-        label: '第1期',
-        key: 'period-1',
-        startDate: '2024-04-01',
-        endDate: '2025-03-31',
-        startMonth: '2024-04',
-        endMonth: '2025-03',
-        months: ['2024-04', '2024-05', '2024-06', '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12', '2025-01', '2025-02', '2025-03'],
-      }
-    );
-  }, [selectedFilter, fiscalPeriods]);
+    if (selectedFilter.includes('-') && selectedFilter.length === 7) {
+      const match = fiscalPeriods.find((p) => p.months?.includes(selectedFilter));
+      if (match) return match;
+    }
+    // Find the period with the most active transactions
+    const periodWithTx = fiscalPeriods.slice().sort((a, b) => {
+      const aCount = transactions.filter(t => a.months?.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+      const bCount = transactions.filter(t => b.months?.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+      return bCount - aCount;
+    })[0];
+
+    return periodWithTx || fiscalPeriods[0] || {
+      periodNumber: 1,
+      label: `第1期 (${settings.fiscalSettings?.fiscalYearStartYear || 2007}/${String(settings.fiscalSettings?.fiscalYearStartMonth || 5).padStart(2, '0')}〜)`,
+      key: 'period-1',
+      startDate: `${settings.fiscalSettings?.fiscalYearStartYear || 2007}-05-01`,
+      endDate: `${(settings.fiscalSettings?.fiscalYearStartYear || 2007) + 1}-04-30`,
+      startMonth: `${settings.fiscalSettings?.fiscalYearStartYear || 2007}-05`,
+      endMonth: `${(settings.fiscalSettings?.fiscalYearStartYear || 2007) + 1}-04`,
+      months: ['2025-05', '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04'],
+    };
+  }, [selectedFilter, fiscalPeriods, transactions, settings.fiscalSettings]);
 
   // Active Month (persisted across reloads)
   const [activeMonth, setActiveMonth] = useState<string>(() => {
@@ -1710,13 +1723,28 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
               onChange={(e) => onSelectFilter(e.target.value)}
               className="text-xs font-bold bg-transparent text-gray-800 focus:outline-hidden pr-2 py-1 cursor-pointer"
             >
-              {fiscalPeriods.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
+              {fiscalPeriods.map((p) => {
+                const count = transactions.filter(t => t.type === 'expense' && (p.months || []).includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+                return (
+                  <option key={p.key} value={p.key}>
+                    {p.label} {count > 0 ? `(${count}件)` : '(0件)'}
+                  </option>
+                );
+              })}
             </select>
           </div>
+
+          {onOpenFiscalSettings && (
+            <button
+              type="button"
+              onClick={onOpenFiscalSettings}
+              className="p-2 text-gray-600 hover:text-indigo-600 hover:bg-gray-100 bg-white border border-gray-200 rounded-xl transition-colors text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="決算期・決算月の設定（第1期開始年月など）"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">決算期設定</span>
+            </button>
+          )}
 
           {/* View Layout Switcher (Card Grid vs Table List) */}
           <div className="flex items-center bg-gray-100 p-1 rounded-xl gap-1">

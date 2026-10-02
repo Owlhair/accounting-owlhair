@@ -34,8 +34,9 @@ export interface Transaction {
 }
 
 export interface FiscalSettings {
-  fiscalYearEndMonth: number; // 決算月 (1〜12, デフォルト: 3月決算なら 3)
-  fiscalYearStartYear: number; // 設立年 / 第1期開始年 (例: 2024)
+  fiscalYearEndMonth: number; // 決算月 (1〜12, 例: 4月決算なら 4)
+  fiscalYearStartYear: number; // 設立年 / 第1期開始年 (例: 2007)
+  fiscalYearStartMonth?: number; // 第1期開始月 / 事業年度開始月 (1〜12, 例: 5)
 }
 
 export type ExpenseTimingGroup = 
