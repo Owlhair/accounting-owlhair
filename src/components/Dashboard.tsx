@@ -102,11 +102,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
               className="bg-transparent focus:outline-hidden cursor-pointer"
             >
               <optgroup label="期ごとの集計">
-                {fiscalPeriods.map(p => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
+                {fiscalPeriods.map(p => {
+                  const txCount = transactions.filter(t => p.months.includes((t.date_from || t.date_to || '').substring(0, 7))).length;
+                  return (
+                    <option key={p.key} value={p.key}>
+                      {p.label} {txCount > 0 ? `(${txCount}件)` : '(0件)'}
+                    </option>
+                  );
+                })}
               </optgroup>
               <optgroup label="単月">
                 {availableMonths.map(m => (

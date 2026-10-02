@@ -1,5 +1,6 @@
 import { Transaction, AppSettings, ExpenseCard } from '../types';
 import { DEFAULT_SALARY_EMPLOYEES, DEFAULT_SALARY_SETTINGS } from './salaryCalculator';
+import persistedTransactionsData from './persisted_transactions.json';
 
 const STORAGE_KEY_TRANSACTIONS = 'scratch_keiri_transactions_v1';
 const STORAGE_KEY_SETTINGS = 'scratch_keiri_settings_v1';
@@ -49,74 +50,53 @@ export const DEFAULT_STORES = [
 export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
   // 1. カードで決済しているもの（カード内で様々な品目を決済）
   {
-    id: 'ec-1',
-    title: 'ビジネスカード決済（明細内訳）',
+    id: 'ec-card',
+    title: 'カード',
     timingGroup: 'credit_card',
     store: '全社共通',
     paymentMethod: 'クレジットカード',
     memo: '毎月カードで支払っている各種明細',
     subItems: [
-      {
-        id: 'sub-1',
-        name: 'Google/SNS広告費',
-        category: '広告宣伝費',
-        costType: 'variable',
-        defaultAmount: 50000,
-        store: '全社共通',
-        memo: '集客用WEB広告（変動）',
-      },
-      {
-        id: 'sub-2',
-        name: 'WEBサーバー・SaaS月額ツール（Canva・Adobe等）',
-        category: '通信費',
-        costType: 'fixed',
-        defaultAmount: 18000,
-        store: '全社共通',
-        memo: 'クラウドツール定額利用料（固定）',
-      },
-      {
-        id: 'sub-3',
-        name: 'Amazon・備品消耗品カード買い出し',
-        category: '消耗品費',
-        costType: 'variable',
-        defaultAmount: 15000,
-        store: '全社共通',
-        memo: '店舗資材・日用品（変動）',
-      },
+      { id: 'sub-c-1', name: '楽天モバイル', category: '通信費', costType: 'variable', defaultAmount: 6505, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-2', name: '日本通信', category: '通信費', costType: 'variable', defaultAmount: 854, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-3', name: 'お名前.com', category: '通信費', costType: 'variable', defaultAmount: 3751, store: '全社共通', memo: 'ドメイン・サーバー' },
+      { id: 'sub-c-4', name: 'BLAST光', category: '通信費', costType: 'fixed', defaultAmount: 6944, store: '全社共通', memo: 'ネット回線' },
+      { id: 'sub-c-5', name: 'ミニモ', category: '広告宣伝費', costType: 'variable', defaultAmount: 4620, store: '全社共通', memo: '集客広告' },
+      { id: 'sub-c-6', name: 'NTT', category: '通信費', costType: 'fixed', defaultAmount: 8314, store: '全社共通', memo: '固定回線・電話' },
+      { id: 'sub-c-7', name: '強髪', category: '仕入', costType: 'variable', defaultAmount: 11000, store: '全社共通', memo: '商品仕入' },
+      { id: 'sub-c-8', name: 'AMAZON', category: '通信費', costType: 'variable', defaultAmount: 980, store: '全社共通', memo: '備品消耗品等' },
+      { id: 'sub-c-9', name: '弥生会計', category: '通信費', costType: 'fixed', defaultAmount: 30580, store: '全社共通', memo: '会計ソフト' },
+      { id: 'sub-c-10', name: 'JCB', category: '支払手数料', costType: 'variable', defaultAmount: 140, store: '全社共通', memo: 'カード決済手数料' },
+      { id: 'sub-c-11', name: '日本通信（2）', category: '通信費', costType: 'variable', defaultAmount: 414, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-12', name: '日本通信（3）', category: '通信費', costType: 'variable', defaultAmount: 392, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-13', name: 'ベスト電器', category: '修繕費', costType: 'variable', defaultAmount: 3220, store: '全社共通', memo: '備品・修繕' },
+      { id: 'sub-c-14', name: '九州電力', category: '水道光熱費', costType: 'variable', defaultAmount: 25535, store: '全社共通', memo: '電気代' },
+      { id: 'sub-c-15', name: '九州電力（2）', category: '水道光熱費', costType: 'variable', defaultAmount: 15525, store: '全社共通', memo: '電気代' },
+      { id: 'sub-c-16', name: 'B-zone', category: '仕入', costType: 'variable', defaultAmount: 1108, store: '全社共通', memo: 'ディーラー仕入' },
+      { id: 'sub-c-17', name: 'ソフトバンク', category: '通信費', costType: 'variable', defaultAmount: 600, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-18', name: 'ソフトバンク（2）', category: '通信費', costType: 'variable', defaultAmount: 1, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-19', name: 'ソフトバンク（3）', category: '通信費', costType: 'variable', defaultAmount: 1, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-20', name: 'ドコモ', category: '通信費', costType: 'variable', defaultAmount: 1, store: '全社共通', memo: '通信費' },
+      { id: 'sub-c-21', name: 'ソフトバンク（4）', category: '通信費', costType: 'variable', defaultAmount: 84, store: '全社共通', memo: '通信費' }
     ],
   },
   // 2. 末にまとめて払うもの
   {
-    id: 'ec-2',
-    title: '月末まとめて支払うもの（請求書払い）',
+    id: 'ec-month-end',
+    title: '月末まとめて支払うもの（請求書・社保・税金）',
     timingGroup: 'month_end',
     store: '全社共通',
     paymentMethod: '銀行振込',
-    memo: '末締め翌月末の振込一覧',
+    memo: '社会保険料・税金・買掛金など',
     subItems: [
-      {
-        id: 'sub-4',
-        name: 'メイン問屋 商品仕入（買掛金）',
-        category: '仕入',
-        costType: 'variable',
-        defaultAmount: 300000,
-        store: '全社共通',
-        memo: '請求書確認（変動）',
-      },
-      {
-        id: 'sub-5',
-        name: '外部委託・パートナー報酬',
-        category: '外注費',
-        costType: 'variable',
-        defaultAmount: 80000,
-        store: '全社共通',
-        memo: '制作・開発パートナー振込',
-      },
+      { id: 'sub-me-1', name: '社会保険料納付（会社負担＋本人分合算）', category: '法定福利費', costType: 'variable', defaultAmount: 57320, store: '全社共通', memo: '社保本人+会社負担分合算' },
+      { id: 'sub-me-2', name: '源泉所得税・住民税（預り金納付）', category: '租税公課', costType: 'variable', defaultAmount: 3863, store: '全社共通', memo: '源泉所得税+住民税 天引き預り金納付' },
+      { id: 'sub-me-3', name: '雇用保険・労働保険（会社負担分）', category: '法定福利費', costType: 'variable', defaultAmount: 978, store: '全社共通', memo: '雇用保険 会社負担分' }
     ],
   },
   // 3. 給与
   {
-    id: 'ec-3',
+    id: 'ec-salary-board',
     title: '役員報酬・スタッフ給与（支給日振込）',
     paymentMethod: '銀行振込',
     category: '給料手当',
@@ -148,7 +128,7 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
   },
   // 4. 月始あたりに払うもの
   {
-    id: 'ec-4',
+    id: 'ec-rent',
     title: '店舗・オフィス家賃',
     paymentMethod: '口座振替',
     category: '地代家賃',
@@ -160,7 +140,7 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
   },
   // 5. その他
   {
-    id: 'ec-5',
+    id: 'ec-util',
     title: '公共料金・通信費（口座引落等）',
     timingGroup: 'other',
     store: '全社共通',
@@ -168,7 +148,7 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
     memo: '毎月の公共料金・ネット回線代',
     subItems: [
       {
-        id: 'sub-6',
+        id: 'sub-u-1',
         name: '電気・水道・ガス代',
         category: '水道光熱費',
         costType: 'variable',
@@ -177,7 +157,7 @@ export const DEFAULT_EXPENSE_CARDS: ExpenseCard[] = [
         memo: '月次使用料（変動）',
       },
       {
-        id: 'sub-7',
+        id: 'sub-u-2',
         name: '店舗光回線・固定電話代',
         category: '通信費',
         costType: 'fixed',
@@ -352,21 +332,38 @@ export const SAMPLE_TRANSACTIONS: Transaction[] = [
 
 export const loadTransactions = (): Transaction[] => {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return persistedTransactionsData as Transaction[];
+    }
     const raw = localStorage.getItem(STORAGE_KEY_TRANSACTIONS);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(SAMPLE_TRANSACTIONS));
-      return SAMPLE_TRANSACTIONS;
+      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(persistedTransactionsData));
+      return persistedTransactionsData as Transaction[];
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 0 && persistedTransactionsData.length > 0) {
+        localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(persistedTransactionsData));
+        return persistedTransactionsData as Transaction[];
+      }
+      if (parsed.length === 9 && parsed.every((t: any) => typeof t.id === 'string' && t.id.startsWith('tx-202508-'))) {
+        localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(persistedTransactionsData));
+        return persistedTransactionsData as Transaction[];
+      }
+      return parsed;
+    }
+    return persistedTransactionsData as Transaction[];
   } catch (err) {
     console.error('Failed to load transactions:', err);
-    return SAMPLE_TRANSACTIONS;
+    return persistedTransactionsData as Transaction[];
   }
 };
 
 export const saveTransactions = (transactions: Transaction[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(transactions));
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(transactions));
+    }
   } catch (err) {
     console.error('Failed to save transactions:', err);
   }
@@ -374,6 +371,20 @@ export const saveTransactions = (transactions: Transaction[]): void => {
 
 export const loadSettings = (): AppSettings => {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return {
+        salesCategories: DEFAULT_SALES_CATEGORIES,
+        expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
+        paymentMethods: DEFAULT_PAYMENT_METHODS,
+        stores: DEFAULT_STORES,
+        closedStores: [],
+        expenseCards: DEFAULT_EXPENSE_CARDS,
+        salaryEmployees: DEFAULT_SALARY_EMPLOYEES,
+        monthlySalarySnapshots: {},
+        salarySettings: DEFAULT_SALARY_SETTINGS,
+        fiscalSettings: DEFAULT_FISCAL_SETTINGS,
+      };
+    }
     const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
     if (!raw) {
       const initialSettings: AppSettings = {
@@ -403,6 +414,15 @@ export const loadSettings = (): AppSettings => {
     let loadedExpenseCards: ExpenseCard[] = Array.isArray(parsed.expenseCards) && parsed.expenseCards.length > 0 
       ? parsed.expenseCards 
       : DEFAULT_EXPENSE_CARDS;
+
+    // Ensure user's 21-item "カード" card is never lost even if localStorage had old 3-item template
+    const hasFullCard = loadedExpenseCards.some((c: ExpenseCard) => (c.title === 'カード' || c.title.includes('カード')) && (c.subItems?.length || 0) >= 10);
+    if (!hasFullCard) {
+      const defaultCard = DEFAULT_EXPENSE_CARDS.find((c) => c.title === 'カード');
+      if (defaultCard) {
+        loadedExpenseCards = [defaultCard, ...loadedExpenseCards.filter((c) => c.title !== 'ビジネスカード決済（明細内訳）')];
+      }
+    }
 
     // Ensure essential timing groups (especially salary) are never missing
     const hasSalaryCard = loadedExpenseCards.some((c: ExpenseCard) => c.timingGroup === 'salary');

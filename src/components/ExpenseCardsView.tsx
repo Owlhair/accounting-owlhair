@@ -250,23 +250,40 @@ export const ExpenseCardsView: React.FC<ExpenseCardsViewProps> = ({
     } catch (e) {}
 
     if (currentPeriod?.months?.length > 0) {
+      // Prioritize month with transactions in this period
+      const monthWithTx = currentPeriod.months.slice().reverse().find((m) =>
+        transactions.some(
+          (t) =>
+            t.type === 'expense' &&
+            ((t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
+        )
+      );
+      if (monthWithTx) return monthWithTx;
+
       const thisMonth = new Date().toISOString().substring(0, 7);
       if (currentPeriod.months.includes(thisMonth)) return thisMonth;
-      return currentPeriod.months[currentPeriod.months.length - 1] || '2025-08';
+      return currentPeriod.months[currentPeriod.months.length - 1] || '2025-05';
     }
-    return '2025-08';
+    return '2025-05';
   });
 
   // Keep active month in sync when period changes & persist to localStorage
   React.useEffect(() => {
     if (currentPeriod?.months?.length > 0 && !currentPeriod.months.includes(activeMonth)) {
-      setActiveMonth(currentPeriod.months[0]);
+      const monthWithTx = currentPeriod.months.slice().reverse().find((m) =>
+        transactions.some(
+          (t) =>
+            t.type === 'expense' &&
+            ((t.date_from && t.date_from.startsWith(m)) || (t.date_to && t.date_to.startsWith(m)))
+        )
+      );
+      setActiveMonth(monthWithTx || currentPeriod.months[0]);
     } else if (activeMonth) {
       try {
         localStorage.setItem('scratch_keiri_expense_active_month', activeMonth);
       } catch (e) {}
     }
-  }, [currentPeriod, activeMonth]);
+  }, [currentPeriod, activeMonth, transactions]);
 
   // Monthly expense totals from transactions for the 12-month minimap
   const expenseMonthTotals = useMemo(() => {

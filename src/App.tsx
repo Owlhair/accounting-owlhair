@@ -96,26 +96,40 @@ export default function App() {
 
   // Selected filter (Defaults to saved filter, or period with active transactions)
   const [selectedFilter, setSelectedFilter] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('scratch_keiri_selected_filter');
-      if (saved) return saved;
-    } catch (e) {}
-
     const loaded = loadTransactions();
     const loadedSettings = loadSettings();
     const periods = calculateFiscalPeriods(loaded, loadedSettings.fiscalSettings);
     
-    // Find the period with the most recent transaction
-    if (loaded.length > 0) {
-      for (const period of periods.slice().reverse()) {
-        const hasTx = loaded.some(t => {
-          const m = (t.date_from || t.date_to || '').substring(0, 7);
-          return period.months.includes(m);
-        });
-        if (hasTx) return period.key;
+    const findBestPeriod = () => {
+      if (loaded.length > 0) {
+        for (const period of periods.slice().reverse()) {
+          const hasTx = loaded.some(t => {
+            const m = (t.date_from || t.date_to || '').substring(0, 7);
+            return period.months.includes(m);
+          });
+          if (hasTx) return period.key;
+        }
       }
-    }
-    return periods[0]?.key || 'ALL';
+      return periods[0]?.key || 'ALL';
+    };
+
+    try {
+      const saved = localStorage.getItem('scratch_keiri_selected_filter');
+      if (saved) {
+        const periodObj = periods.find(p => p.key === saved);
+        if (periodObj) {
+          const hasTx = loaded.some(t => {
+            const m = (t.date_from || t.date_to || '').substring(0, 7);
+            return periodObj.months.includes(m);
+          });
+          if (hasTx) return saved;
+        } else if (saved === 'ALL') {
+          return 'ALL';
+        }
+      }
+    } catch (e) {}
+
+    return findBestPeriod();
   });
 
   // Save selectedFilter to localStorage
@@ -125,15 +139,35 @@ export default function App() {
     } catch (e) {}
   }, [selectedFilter]);
 
-  // Keep selected filter valid if periods update
+  // Keep selected filter valid if periods update or if empty period was selected
   useEffect(() => {
     if (selectedFilter && typeof selectedFilter === 'string' && selectedFilter.startsWith('period-')) {
       const exists = fiscalPeriods.some(p => p.key === selectedFilter);
       if (!exists && fiscalPeriods.length > 0) {
         setSelectedFilter(fiscalPeriods[0].key);
+      } else if (transactions.length > 0) {
+        const currentPeriod = fiscalPeriods.find(p => p.key === selectedFilter);
+        if (currentPeriod) {
+          const hasTxInCurrent = transactions.some(t => {
+            const m = (t.date_from || t.date_to || '').substring(0, 7);
+            return currentPeriod.months.includes(m);
+          });
+          if (!hasTxInCurrent) {
+            for (const period of fiscalPeriods.slice().reverse()) {
+              const hasTx = transactions.some(t => {
+                const m = (t.date_from || t.date_to || '').substring(0, 7);
+                return period.months.includes(m);
+              });
+              if (hasTx) {
+                setSelectedFilter(period.key);
+                break;
+              }
+            }
+          }
+        }
       }
     }
-  }, [fiscalPeriods, selectedFilter]);
+  }, [fiscalPeriods, selectedFilter, transactions]);
 
   // Active month for modals based on current view/filter
   const activeInputMonth = useMemo(() => {
@@ -154,7 +188,7 @@ export default function App() {
       const d = transactions[0].date_from || transactions[0].date_to;
       if (d && d.length >= 7) return d.substring(0, 7);
     }
-    return '2025-08';
+    return '2025-05';
   }, [selectedFilter, fiscalPeriods, transactions]);
 
   // Multi-user team chat states
@@ -190,6 +224,24 @@ export default function App() {
   const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
   useEffect(() => {
+    // Immediately pull latest from Firestore to guarantee fresh data instantly on initial load
+    pullLatestFromFirestore().then((result) => {
+      if (result.transactions && result.transactions.length > 0) {
+        setTransactions(result.transactions);
+        saveTransactions(result.transactions);
+      }
+      if (result.settings) {
+        setSettings(result.settings);
+        saveSettings(result.settings);
+      }
+      if (result.chatMessages && result.chatMessages.length > 0) {
+        setChatMessages(result.chatMessages);
+        saveChatMessages(result.chatMessages);
+      }
+    }).catch((err) => {
+      console.warn('Initial pull from Firestore warning:', err);
+    });
+
     const unsubscribeFirestore = initFirestoreRealtimeSync({
       onTransactionsUpdate: (cloudTx) => {
         setTransactions(cloudTx);
@@ -1222,6 +1274,7 @@ export default function App() {
         isCloudConnected={isCloudConnected}
         isCloudSyncing={isCloudSyncing}
         onManualCloudSync={handleForcePullFromCloud}
+        transactionCount={transactions.length}
       />
 
       {/* Main Container */}
